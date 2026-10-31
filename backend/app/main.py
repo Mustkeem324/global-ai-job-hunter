@@ -13,6 +13,7 @@ from app.api.routes_telegram import router as telegram_router
 from app.api.routes_analytics import router as analytics_router
 from app.api.routes_audit import router as audit_router
 from app.services.scheduler_service import scheduler_service
+from app.services.telegram_service import telegram_service
 from app.services.resume_parser import resume_parser_service
 from app.services.discovery_service import discovery_service
 from app.services.matching_engine import matching_engine
@@ -150,9 +151,11 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     bootstrap_initial_state()
     scheduler_service.start()
+    telegram_service.start_polling()
     yield
     # Shutdown
     scheduler_service.stop()
+    telegram_service.stop_polling()
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
