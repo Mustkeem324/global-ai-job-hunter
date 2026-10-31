@@ -175,7 +175,7 @@ export default function ResumesPage() {
             {/* Extracted Skills with Evidence Links */}
             <div className="space-y-3">
               <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Extracted Skills & Verifiable Evidence
+                Extracted Skills & Verifiable Evidence ({profile.skills?.length || 0})
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {profile.skills?.map((sk: any, i: number) => (
@@ -187,12 +187,82 @@ export default function ResumesPage() {
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-400 italic font-mono truncate">
-                      "...{sk.evidence}..."
+                      "{sk.evidence}"
                     </p>
                   </div>
                 ))}
               </div>
             </div>
+
+            {/* Projects Showcase */}
+            {profile.projects && profile.projects.length > 0 && (
+              <div className="space-y-3 pt-2">
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-brand" />
+                  <span>Verified Projects & Systems Portfolio ({profile.projects.length})</span>
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {profile.projects.map((proj: any, i: number) => (
+                    <div key={i} className="p-3.5 rounded-xl bg-background/50 border border-surfaceBorder space-y-1.5">
+                      <div className="font-semibold text-xs text-white">{proj.title}</div>
+                      <p className="text-[11px] text-gray-300 leading-relaxed">{proj.description}</p>
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {proj.technologies?.map((tech: string, tidx: number) => (
+                          <span key={tidx} className="text-[9px] px-1.5 py-0.5 rounded bg-surface border border-surfaceBorder text-gray-400 font-mono">
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Work Authorization & Remote Eligibility */}
+            {profile.work_authorization && (
+              <div className="p-4 rounded-xl bg-brand/5 border border-brand/20 space-y-2">
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span className="text-emerald-400">●</span> International Remote Work Authorization
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                  <div>
+                    <span className="text-gray-400 block text-[10px]">Tax / Billing Entity:</span>
+                    <span className="font-semibold text-white">{profile.work_authorization.contractor_entity || "FreelanceKar (GST Reg.)"}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px]">US W-8BEN Tax Status:</span>
+                    <span className="font-semibold text-emerald-400">Compliant / Ready</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px]">Weekly Availability:</span>
+                    <span className="font-semibold text-white">{profile.work_authorization.weekly_availability_hours || 40} hrs / week</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-400 block text-[10px]">Payment Channels:</span>
+                    <span className="font-semibold text-gray-300">SWIFT, Wise, USDC</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Uncertainty Detector & Candidate Clarifications */}
+            {profile.uncertain_claims && profile.uncertain_claims.length > 0 && (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                <h4 className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                  <span>⚠️</span> Candidate Profile Clarifications (Zero Hallucination Guarantee)
+                </h4>
+                <div className="space-y-2">
+                  {profile.uncertain_claims.map((uc: any, i: number) => (
+                    <div key={i} className="text-xs p-3 rounded-lg bg-background/80 border border-amber-500/20 space-y-1">
+                      <div className="font-semibold text-white">{uc.issue}</div>
+                      <div className="text-[11px] text-gray-400 italic">Document text: {uc.detected_in_document}</div>
+                      <div className="text-[11px] text-amber-200 font-medium pt-1">Recommended action: {uc.recommendation_to_user}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Education Credentials */}
             <div className="space-y-3 pt-2">

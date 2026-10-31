@@ -149,7 +149,12 @@ def get_candidate_profile(db: Session = Depends(get_db)):
         "summary": profile.summary,
         "github_url": profile.github_url,
         "portfolio_url": profile.portfolio_url,
-        "education": profile.education_data,
+        "education": profile.education_data or [],
+        "certifications": profile.certifications_data or [],
+        "projects": profile.projects_data or [],
+        "work_authorization": profile.work_authorization or {},
+        "uncertain_claims": profile.uncertain_claims or [],
+        "traceable_claims": profile.traceable_claims or [],
         "skills": [{"name": s.name, "category": s.category, "evidence": s.evidence_text} for s in skills],
         "experiences": [
             {
@@ -164,3 +169,28 @@ def get_candidate_profile(db: Session = Depends(get_db)):
             {"id": r.id, "file_name": r.file_name, "file_path": r.file_path, "is_primary": r.is_primary} for r in resumes
         ]
     }
+
+@router.post("/resolve-uncertainty")
+def resolve_uncertainty(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
+    """Allow candidate to confirm or resolve an uncertain claim (e.g. experience seniority or relocation)."""
+    profile = db.query(CandidateProfile).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found.")
+    
+    field = payload.get("field")
+    confirmed_value = payload.get("confirmed_value")
+    
+    current_uncertain = list(profile.uncertain_claims or [])
+    updated_uncertain = []
+    resolved = False
+    
+    for item in current_uncertain:
+        if item.get("field") == field:
+            item["resolved"] = True
+            item["confirmed_value"] = confirmed_value
+            resolved = True
+        updated_uncertain.append(item)
+        
+    profile.uncertain_claims = updated_uncertain
+    db.commit()
+    return {"status": "success", "field": field, "confirmed_value": confirmed_value, "resolved": resolved}

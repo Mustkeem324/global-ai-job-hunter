@@ -40,6 +40,10 @@ class CandidateProfile(Base):
     total_experience_months = Column(Integer, default=25)
     education_data = Column(JSON, default=list) # degrees, institutions, grades
     certifications_data = Column(JSON, default=list)
+    projects_data = Column(JSON, default=list) # professional projects with descriptions & technologies
+    work_authorization = Column(JSON, default=dict) # international remote eligibility, tax compliance
+    uncertain_claims = Column(JSON, default=list) # ambiguous items needing candidate confirmation
+    traceable_claims = Column(JSON, default=list) # full audit trail of evidence text spans
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

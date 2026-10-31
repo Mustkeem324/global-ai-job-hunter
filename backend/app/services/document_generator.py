@@ -70,4 +70,12 @@ class DocumentGeneratorService:
             "standard_answers": standard_answers
         }
 
+    def generate_tailored_summary(self, candidate_dict: Dict[str, Any], job_dict: Dict[str, Any]) -> str:
+        docs = self.generate_application_documents(job_dict, candidate_dict)
+        return docs["tailored_summary"]
+
+    def generate_cover_letter(self, candidate_dict: Dict[str, Any], job_dict: Dict[str, Any]) -> str:
+        docs = self.generate_application_documents(job_dict, candidate_dict)
+        return docs["cover_letter"]
+
 document_generator = DocumentGeneratorService()
