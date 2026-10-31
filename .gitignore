@@ -2,6 +2,13 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.db
+*.sqlite3
+
+# Node & Next.js
+node_modules/
+.next/
+out/
 
 # Environments
 .env
@@ -9,6 +16,10 @@ __pycache__/
 env/
 venv/
 ENV/
+
+# Local Storage
+storage/
+data/
 
 # OS metadata
 .DS_Store
