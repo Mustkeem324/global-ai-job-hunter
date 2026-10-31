@@ -141,6 +141,13 @@ class JobPosting(Base):
     location = Column(String(255), default="Remote")
     application_url = Column(String(1000), nullable=False)
     description = Column(Text, nullable=False)
+    company_website = Column(String(500), nullable=True)
+    normalized_role = Column(String(255), nullable=True)
+    required_skills = Column(JSON, default=list)
+    preferred_skills = Column(JSON, default=list)
+    location_evidence = Column(Text, nullable=True)
+    verification_state = Column(String(50), default="VERIFIED_OPEN") # VERIFIED_OPEN, PROBABLY_OPEN, UNVERIFIED, EXPIRED, CLOSED
+    application_capability = Column(String(50), default="USER_REVIEW_REQUIRED") # API_SUBMISSION_AUTHORIZED, AUTHORIZED_FORM_WORKFLOW, USER_REVIEW_REQUIRED, MANUAL_SUBMISSION_ONLY, UNSUPPORTED
     status = Column(String(50), default="Active") # Active, Expired, Removed
     posted_date = Column(DateTime, nullable=True)
     verified_at = Column(DateTime, default=utcnow)
@@ -154,6 +161,30 @@ class JobPosting(Base):
     requirements = relationship("JobRequirement", back_populates="job_posting", cascade="all, delete-orphan")
     matches = relationship("JobMatch", back_populates="job_posting", cascade="all, delete-orphan")
     applications = relationship("Application", back_populates="job_posting")
+
+class CompanyRegistry(Base):
+    __tablename__ = "company_registry"
+    id = Column(Integer, primary_key=True, index=True)
+    company_name = Column(String(255), unique=True, nullable=False, index=True)
+    official_website = Column(String(500), nullable=True)
+    career_page = Column(String(500), nullable=True)
+    ats_provider = Column(String(50), nullable=False) # Greenhouse, Lever, Ashby, Workable
+    ats_board_identifier = Column(String(100), nullable=False, index=True)
+    supported_locations = Column(JSON, default=list)
+    source_status = Column(String(50), default="Active") # Active, Deprecated, Protected
+    last_successful_scan = Column(DateTime, nullable=True)
+    latest_synchronization_status = Column(String(50), default="Pending")
+    last_verification_timestamp = Column(DateTime, default=utcnow)
+    created_at = Column(DateTime, default=utcnow)
+
+class SearchQueryRecord(Base):
+    __tablename__ = "search_queries"
+    id = Column(Integer, primary_key=True, index=True)
+    seed_keyword = Column(String(100), nullable=False)
+    expanded_terms = Column(JSON, default=list)
+    last_executed_at = Column(DateTime, default=utcnow)
+    results_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=utcnow)
 
 class JobRequirement(Base):
     __tablename__ = "job_requirements"
