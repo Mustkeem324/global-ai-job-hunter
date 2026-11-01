@@ -919,11 +919,11 @@ class TelegramNotificationService:
         if clean_cmd in ("/start", "/menu", "/intro"):
             self.send_message(self.build_start_message(), target_chat_id=chat_id, reply_markup=self.build_start_markup())
 
-        elif clean_cmd in ("/clear", "/clean", "/cls", "/reset", "/purge"):
+        elif clean_cmd in ("/clear", "/clean", "/cls", "/reset", "/purge", "/delete", "/deleted", "/dleted", "/deleteall", "/clearall", "/wipe", "/flush"):
             tracked = list(self.tracked_messages.get(str(chat_id), []))
             if incoming_mid:
                 tracked.append(incoming_mid)
-                for i in range(max(1, incoming_mid - 75), incoming_mid):
+                for i in range(max(1, incoming_mid - 300), incoming_mid):
                     tracked.append(i)
             self.delete_messages(chat_id=chat_id, message_ids=tracked)
             self.tracked_messages[str(chat_id)] = []
@@ -2531,13 +2531,13 @@ class TelegramNotificationService:
                 card = self.build_help_category(cat)
                 self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
 
-            elif data == "cmd:clear":
+            elif data in ("cmd:clear", "cmd:delete"):
                 self.answer_callback_query(query_id, text="🧹 Purging previous messages...")
                 tracked = list(self.tracked_messages.get(str(chat_id), []))
                 msg_id = query.get("message", {}).get("message_id")
                 if msg_id:
                     tracked.append(msg_id)
-                    for i in range(max(1, msg_id - 75), msg_id):
+                    for i in range(max(1, msg_id - 300), msg_id):
                         tracked.append(i)
                 self.delete_messages(chat_id=chat_id, message_ids=tracked)
                 self.tracked_messages[str(chat_id)] = []
