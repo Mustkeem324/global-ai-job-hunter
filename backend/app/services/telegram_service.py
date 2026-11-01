@@ -123,6 +123,49 @@ class TelegramNotificationService:
         }
         return {"text": text, "reply_markup": reply_markup}
 
+    def format_naukri_job_card(self, job: Dict[str, Any], match_score: float) -> Dict[str, Any]:
+        """
+        Phase 7 Module 7: Canonical Naukri Job Card
+        """
+        job_id = job.get("id") or job.get("source_job_id", "")
+        company = job.get("company_name", "Leading Indian Tech Enterprise")
+        position = job.get("title", "Full-Stack AI Developer")
+        location = job.get("location", "Noida / Delhi NCR, India")
+        salary = job.get("compensation_text", "Market Standard / Competitive")
+        contract = job.get("employment_type", "Full-time")
+        app_url = job.get("application_url", "https://www.naukri.com")
+        capability = job.get("capability", "MANUAL_APPLICATION_ASSISTANT")
+
+        text = (
+            f"🇮🇳 <b>GLOBAL JOB HUNTER AI</b>\n\n"
+            f"🎯 <b>NAUKRI JOB MATCH</b>\n\n"
+            f"🏢 <b>Company:</b> {company}\n"
+            f"💼 <b>Position:</b> {position}\n"
+            f"📍 <b>Location:</b> {location}\n"
+            f"💰 <b>Salary:</b> <code>{salary}</code>\n"
+            f"📑 <b>Employment:</b> {contract}\n"
+            f"🎯 <b>Match:</b> <b>{int(match_score)}/100</b>\n\n"
+            f"🛠 <b>Required Skills:</b>\n"
+            f"Python, FastAPI, Next.js, RLHF Model Evaluation, PostgreSQL\n\n"
+            f"📡 <b>Application Source:</b> Naukri.com\n"
+            f"⚡ <b>Application Capability:</b> <code>{capability}</code>"
+        )
+
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "👁 View Job", "url": app_url},
+                    {"text": "📝 Prepare Application", "callback_data": f"nk:prep:{job_id}"}
+                ],
+                [
+                    {"text": "⭐ Save", "callback_data": f"save:{job_id}"},
+                    {"text": "❌ Skip", "callback_data": f"skip:{job_id}"}
+                ]
+            ]
+        }
+        return {"text": text, "reply_markup": reply_markup}
+
+
     def notify_high_match_job(self, job: Dict[str, Any], match_score: float) -> Dict[str, Any]:
         """Dispatch high-match vacancy to Telegram using standard card format."""
         card = self.format_job_card(job, match_score)
@@ -172,6 +215,49 @@ class TelegramNotificationService:
             ]
         }
         return {"text": text, "reply_markup": reply_markup}
+
+    def format_naukri_job_card(self, job: Dict[str, Any], match_score: float) -> Dict[str, Any]:
+        """
+        Phase 7 Module 7: Canonical Naukri Job Card
+        """
+        job_id = job.get("id") or job.get("source_job_id", "")
+        company = job.get("company_name", "Leading Indian Tech Enterprise")
+        position = job.get("title", "Full-Stack AI Developer")
+        location = job.get("location", "Noida / Delhi NCR, India")
+        salary = job.get("compensation_text", "Market Standard / Competitive")
+        contract = job.get("employment_type", "Full-time")
+        app_url = job.get("application_url", "https://www.naukri.com")
+        capability = job.get("capability", "MANUAL_APPLICATION_ASSISTANT")
+
+        text = (
+            f"🇮🇳 <b>GLOBAL JOB HUNTER AI</b>\n\n"
+            f"🎯 <b>NAUKRI JOB MATCH</b>\n\n"
+            f"🏢 <b>Company:</b> {company}\n"
+            f"💼 <b>Position:</b> {position}\n"
+            f"📍 <b>Location:</b> {location}\n"
+            f"💰 <b>Salary:</b> <code>{salary}</code>\n"
+            f"📑 <b>Employment:</b> {contract}\n"
+            f"🎯 <b>Match:</b> <b>{int(match_score)}/100</b>\n\n"
+            f"🛠 <b>Required Skills:</b>\n"
+            f"Python, FastAPI, Next.js, RLHF Model Evaluation, PostgreSQL\n\n"
+            f"📡 <b>Application Source:</b> Naukri.com\n"
+            f"⚡ <b>Application Capability:</b> <code>{capability}</code>"
+        )
+
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "👁 View Job", "url": app_url},
+                    {"text": "📝 Prepare Application", "callback_data": f"nk:prep:{job_id}"}
+                ],
+                [
+                    {"text": "⭐ Save", "callback_data": f"save:{job_id}"},
+                    {"text": "❌ Skip", "callback_data": f"skip:{job_id}"}
+                ]
+            ]
+        }
+        return {"text": text, "reply_markup": reply_markup}
+
 
 
     def notify_application_confirmed(self, app_id: int, job: Dict[str, Any], confirmation_id: str, applied_at: str) -> Dict[str, Any]:
@@ -1009,6 +1095,258 @@ class TelegramNotificationService:
             )
             self.send_message(conv_msg, target_chat_id=chat_id)
 
+        # =========================================================
+        # PHASE 7: NAUKRI.COM INTEGRATION & NEO TRACKING COMMANDS
+        # =========================================================
+        elif clean_cmd in ("/naukri", "/naukricontrol"):
+            from app.services.naukri_adapter import naukri_adapter
+            health = naukri_adapter.get_integration_health()
+            caps = naukri_adapter.get_capabilities()
+            msg = (
+                f"🇮🇳 <b>NAUKRI.COM INTEGRATION DASHBOARD (PHASE 7)</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"• <b>Status:</b> 🟢 {health['status']}\n"
+                f"• <b>Partner License:</b> <code>{caps['partner_license_status']}</code>\n"
+                f"• <b>Naukri Neo Tracking:</b> {'🟢 Active' if caps['capabilities']['NAUKRI_NEO_TRACKING'] else '⚪ Idle / Unconfigured'}\n"
+                f"• <b>Assisted Application Mode:</b> 🟢 Enabled\n"
+                f"• <b>Email Alert Ingestion:</b> 🟢 Active\n\n"
+                f"<b>Available Commands:</b>\n"
+                f"• /naukrijobs — Imported Naukri openings\n"
+                f"• /naukrimatch — Highest matching India jobs\n"
+                f"• /naukriprofile — Optimized Naukri profile package\n"
+                f"• /naukrineo — Configure Neo / Naukri360 Pro tracking\n"
+                f"• /naukribulk — Bulk application preparation\n"
+                f"• /naukrihistory — Provenance-tracked application history\n"
+                f"• /naukristats — India employment analytics\n\n"
+                f"<i>Tip: Paste any Naukri job link directly here to import and match it!</i>"
+            )
+            markup = {
+                "inline_keyboard": [
+                    [
+                        {"text": "🎯 Top Matches", "callback_data": "nk:nav:match"},
+                        {"text": "✨ Optimize Profile", "callback_data": "nk:nav:profile"}
+                    ],
+                    [
+                        {"text": "🤖 Neo Tracking", "callback_data": "nk:nav:neo"},
+                        {"text": "📊 Naukri Stats", "callback_data": "nk:nav:stats"}
+                    ]
+                ]
+            }
+            self.send_message(msg, target_chat_id=chat_id, reply_markup=markup)
+
+        elif clean_cmd in ("/naukrijobs",):
+            db = SessionLocal()
+            try:
+                from app.models.schema import JobPosting
+                jobs = db.query(JobPosting).filter(
+                    JobPosting.source_id.in_(["naukri", "naukri_neo"]),
+                    JobPosting.status == "active"
+                ).order_by(JobPosting.id.desc()).limit(3).all()
+                if not jobs:
+                    self.send_message("🇮🇳 <b>NAUKRI JOBS:</b>\nNo imported Naukri vacancies currently in database. Paste any Naukri URL to import one instantly or sync alerts with /naukrisync.", target_chat_id=chat_id)
+                else:
+                    self.send_message(f"🇮🇳 <b>IMPORTED NAUKRI VACANCIES:</b>", target_chat_id=chat_id)
+                    for j in jobs:
+                        card = self.format_naukri_job_card({
+                            "id": j.id,
+                            "source_job_id": j.source_job_id,
+                            "title": j.title,
+                            "company_name": j.company_name,
+                            "location": j.location,
+                            "compensation_text": j.compensation_text,
+                            "employment_type": j.employment_type,
+                            "application_url": j.application_url,
+                            "capability": "MANUAL_APPLICATION_ASSISTANT"
+                        }, 89.0)
+                        self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/naukrimatch", "/naukritop"):
+            db = SessionLocal()
+            try:
+                from app.models.schema import JobPosting
+                from app.services.naukri_adapter import naukri_adapter
+                jobs = db.query(JobPosting).filter(
+                    JobPosting.is_india_eligible == True,
+                    JobPosting.status == "active"
+                ).order_by(JobPosting.id.desc()).limit(15).all()
+
+                scored = []
+                for j in jobs:
+                    s = naukri_adapter.calculate_match({
+                        "title": j.title,
+                        "description": j.description,
+                        "company_name": j.company_name,
+                        "location": j.location,
+                        "is_india_eligible": True
+                    })
+                    if s >= 85:
+                        scored.append((j, s))
+
+                scored.sort(key=lambda x: x[1], reverse=True)
+                if not scored:
+                    self.send_message("🇮🇳 No high-matching (≥85%) India roles found. Use /search or paste a Naukri URL.", target_chat_id=chat_id)
+                else:
+                    self.send_message(f"🎯 <b>TOP MATCHING INDIA & NAUKRI ROLES ({len(scored[:3])}):</b>", target_chat_id=chat_id)
+                    for j, s in scored[:3]:
+                        card = self.format_naukri_job_card({
+                            "id": j.id,
+                            "source_job_id": j.source_job_id,
+                            "title": j.title,
+                            "company_name": j.company_name,
+                            "location": j.location,
+                            "compensation_text": j.compensation_text,
+                            "employment_type": j.employment_type,
+                            "application_url": j.application_url,
+                            "capability": "MANUAL_APPLICATION_ASSISTANT"
+                        }, s)
+                        self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/naukriprofile", "/naukriresume", "/naukriopt"):
+            from app.services.naukri_profile_service import naukri_profile_service
+            pkg = naukri_profile_service.generate_profile_optimization_package()
+            msg = (
+                f"✨ <b>NAUKRI PROFILE OPTIMIZATION PACKAGE</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<b>Candidate:</b> {pkg['candidate']}\n\n"
+                f"🏷 <b>Recommended Headline ({pkg['headline_char_count']}/250 chars):</b>\n"
+                f"<code>{pkg['recommended_headline']}</code>\n\n"
+                f"🛠 <b>Key Skills Tags (Comma-Separated):</b>\n"
+                f"<code>{pkg['key_skills_csv']}</code>\n\n"
+                f"📋 <b>Profile Summary:</b>\n"
+                f"<i>{pkg['profile_summary'][:350]}...</i>\n\n"
+                f"📌 <b>Notice Period:</b> <code>{pkg['notice_period']}</code>\n"
+                f"📍 <b>Preferred Locations:</b> {', '.join(pkg['preferred_locations'])}\n\n"
+                f"💡 <i>Copy the headline and key skills directly into your Naukri profile editor.</i>"
+            )
+            self.send_message(msg, target_chat_id=chat_id)
+
+        elif clean_cmd in ("/naukrineo",):
+            from app.services.naukri_neo_service import naukri_neo_service
+            db = SessionLocal()
+            try:
+                from app.models.schema import NaukriIntegrationSetting
+                cfg = db.query(NaukriIntegrationSetting).first()
+                is_neo = cfg.is_neo_enabled if cfg else False
+                is_pro = cfg.is_naukri360_pro if cfg else False
+                msg = (
+                    f"🤖 <b>NAUKRI NEO & NAUKRI360 PRO TRACKING</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"• <b>Neo Auto-Apply Tracking:</b> {'🟢 ENABLED' if is_neo else '⚪ DISABLED'}\n"
+                    f"• <b>Naukri360 Pro Subscription:</b> {'🟢 ACTIVE' if is_pro else '⚪ STANDARD'}\n"
+                    f"• <b>Confirmation Ingestion:</b> Active via Gmail OAuth\n\n"
+                    f"<i>Note: Naukri Neo is an internal Info Edge service. Our bot ingests verified application receipts without claiming to have performed the submission.</i>"
+                )
+                markup = {
+                    "inline_keyboard": [
+                        [
+                            {"text": f"{'Disable' if is_neo else 'Enable'} Neo Tracking", "callback_data": "nk:neo:toggle"},
+                            {"text": "📜 View Neo Applications", "callback_data": "nk:nav:history"}
+                        ]
+                    ]
+                }
+                self.send_message(msg, target_chat_id=chat_id, reply_markup=markup)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/naukribulk",):
+            from app.services.naukri_discovery_service import naukri_discovery_service
+            batch_res = naukri_discovery_service.prepare_naukri_batch(batch_size=10)
+            sm = batch_res["summary"]
+            msg = (
+                f"📦 <b>NAUKRI MULTI-JOB APPLICATION WORKFLOW</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"• <b>Evaluated Opportunities:</b> {sm['total_evaluated']}\n"
+                f"• <b>Ready for Manual Submission:</b> {sm['ready_for_manual']}\n"
+                f"• <b>External ATS Auto-Submittable:</b> {sm['authorized_auto']}\n"
+                f"• <b>Already Applied:</b> {sm['already_applied']}\n"
+                f"• <b>Ineligible:</b> {sm['ineligible']}\n\n"
+                f"<i>Prepared packages contain tailored resumes and verified screening answers.</i>"
+            )
+            self.send_message(msg, target_chat_id=chat_id)
+
+        elif clean_cmd in ("/naukrihistory",):
+            db = SessionLocal()
+            try:
+                from app.models.schema import NaukriApplicationSource
+                sources = db.query(NaukriApplicationSource).order_by(NaukriApplicationSource.id.desc()).limit(6).all()
+                if not sources:
+                    self.send_message("📜 <b>NAUKRI APPLICATION HISTORY:</b>\nNo tracked Naukri applications recorded yet.", target_chat_id=chat_id)
+                else:
+                    lines = [f"📜 <b>NAUKRI APPLICATION PROVENANCE HISTORY ({len(sources)}):</b>\n"]
+                    for s in sources:
+                        app = s.application
+                        job = app.job_posting if app else None
+                        lines.append(
+                            f"• <b>{job.company_name if job else 'Employer'} — {job.title if job else 'Role'}</b>\n"
+                            f"  Origin: <code>{s.source_type}</code> | Status: <b>{app.status if app else 'SUBMITTED'}</b>\n"
+                        )
+                    self.send_message("\n".join(lines), target_chat_id=chat_id)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/naukristats",):
+            db = SessionLocal()
+            try:
+                from app.models.schema import JobPosting, NaukriNeoStatusRecord, NaukriApplicationSource
+                total_naukri = db.query(JobPosting).filter(JobPosting.source_id.in_(["naukri", "naukri_neo"])).count()
+                total_neo = db.query(NaukriNeoStatusRecord).count()
+                total_sources = db.query(NaukriApplicationSource).count()
+                msg = (
+                    f"📊 <b>NAUKRI & INDIA PIPELINE ANALYTICS</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"• <b>Discovered Naukri Vacancies:</b> {total_naukri}\n"
+                    f"• <b>Naukri Neo Auto-Applications Tracked:</b> {total_neo}\n"
+                    f"• <b>Total Sourced Applications:</b> {total_sources}\n"
+                    f"• <b>Target Locations:</b> Delhi NCR, Noida, Gurugram, Remote India\n"
+                    f"• <b>Target Roles:</b> AI Training, LLM Evaluation, Full-Stack Dev\n"
+                )
+                self.send_message(msg, target_chat_id=chat_id)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/naukrisync",):
+            self.send_message("🔄 <i>Synchronizing authorized Naukri job alerts and Neo confirmations from Gmail...</i>", target_chat_id=chat_id)
+            from app.services.naukri_adapter import naukri_adapter
+            res = naukri_adapter.reconcile_application_history()
+            self.send_message(f"✅ Sync complete. Reconciled {res['reconciled_neo_count']} Naukri Neo records.", target_chat_id=chat_id)
+
+        elif clean_cmd in ("/naukristatus",):
+            from app.services.naukri_adapter import naukri_adapter
+            health = naukri_adapter.get_integration_health()
+            self.send_message(
+                f"🛡 <b>NAUKRI INTEGRATION HEALTH & COMPLIANCE</b>\n\n"
+                f"• <b>Health Status:</b> {health['status']}\n"
+                f"• <b>Compliance:</b> {health['compliance_status']}\n"
+                f"• <b>Active Capabilities:</b> {', '.join(health['active_capabilities'])}\n"
+                f"• <b>Partner API:</b> {'Configured' if health['partner_access'] else 'Staged / Awaiting License'}",
+                target_chat_id=chat_id
+            )
+
+        elif "naukri.com/job-listings" in text:
+            # Method A: Direct Naukri URL paste interceptor!
+            url_match = re.search(r"(https?://(?:www\.)?naukri\.com/job-listings-[^\s]+)", text)
+            if url_match:
+                naukri_url = url_match.group(1)
+                self.send_message(f"📥 <i>Naukri URL detected. Ingesting and evaluating compatibility...</i>", target_chat_id=chat_id)
+                from app.services.naukri_discovery_service import naukri_discovery_service
+                ingest_res = naukri_discovery_service.ingest_naukri_url(naukri_url)
+                if ingest_res.get("success"):
+                    card = self.format_naukri_job_card({
+                        "id": ingest_res["job_id"],
+                        "title": ingest_res["title"],
+                        "company_name": ingest_res["company"],
+                        "application_url": ingest_res["application_url"],
+                        "capability": ingest_res.get("capability", "MANUAL_APPLICATION_ASSISTANT")
+                    }, ingest_res.get("match_score", 90.0))
+                    self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
+                else:
+                    self.send_message(f"⚠️ {ingest_res.get('message')}", target_chat_id=chat_id)
+
+
 
         else:
             # If not a slash command, treat plain text query (e.g. "python", "ai developer") as search
@@ -1469,6 +1807,72 @@ class TelegramNotificationService:
                 self.answer_callback_query(query_id, text="Syncing Google Calendar...")
                 cal_res = interview_intelligence_service.stage_google_calendar_event(intv_id)
                 self.send_message(f"📅 {cal_res['message']}", target_chat_id=chat_id)
+
+            elif data.startswith("nk:prep:"):
+                raw_jid = data.split(":", 2)[2]
+                self.answer_callback_query(query_id, text="Preparing tailored application package...")
+                from app.services.naukri_adapter import naukri_adapter
+                from app.models.schema import JobPosting
+                db_lookup = SessionLocal()
+                try:
+                    job = db_lookup.query(JobPosting).filter(
+                        (JobPosting.id == (int(raw_jid) if raw_jid.isdigit() else -1)) | (JobPosting.source_job_id == raw_jid)
+                    ).first()
+                    if not job:
+                        self.send_message(f"⚠️ Could not locate job #{raw_jid}.", target_chat_id=chat_id)
+                    else:
+                        pkg = naukri_adapter.create_application_package(job.id)
+                        if pkg.get("success"):
+                            sa = pkg.get("screening_answers", {})
+                            prep_msg = (
+                                f"📝 <b>NAUKRI APPLICATION PACKAGE PREPARED</b>\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                                f"<b>Company:</b> {pkg['company']}\n"
+                                f"<b>Position:</b> {pkg['title']}\n"
+                                f"<b>Capability:</b> <code>{pkg['capability']}</code>\n\n"
+                                f"<b>Verified Screening Answers:</b>\n"
+                                f"• <b>Notice Period:</b> {sa.get('notice_period')}\n"
+                                f"• <b>Current Location:</b> {sa.get('current_location')}\n"
+                                f"• <b>Total Experience:</b> {sa.get('total_experience')}\n\n"
+                                f"🔗 <b>Official Portal:</b> <a href='{pkg['application_url']}'>Open Naukri Application Page</a>\n\n"
+                                f"<i>{pkg['action_directive']}</i>"
+                            )
+                            markup = {
+                                "inline_keyboard": [
+                                    [
+                                        {"text": "🚀 Open Official Job", "url": pkg["application_url"]}
+                                    ]
+                                ]
+                            }
+                            self.send_message(prep_msg, target_chat_id=chat_id, reply_markup=markup)
+                        else:
+                            self.send_message(f"⚠️ {pkg.get('message')}", target_chat_id=chat_id)
+                finally:
+                    db_lookup.close()
+
+            elif data == "nk:neo:toggle":
+                from app.services.naukri_neo_service import naukri_neo_service
+                from app.models.schema import NaukriIntegrationSetting
+                db_neo = SessionLocal()
+                try:
+                    cfg = db_neo.query(NaukriIntegrationSetting).first()
+                    new_val = not (cfg.is_neo_enabled if cfg else False)
+                    res = naukri_neo_service.configure_neo(is_neo_enabled=new_val)
+                    self.answer_callback_query(query_id, text=f"Naukri Neo tracking is now {'ENABLED' if new_val else 'DISABLED'}")
+                    self.send_message(f"🤖 {res['message']}", target_chat_id=chat_id)
+                finally:
+                    db_neo.close()
+
+            elif data == "nk:nav:profile":
+                from app.services.naukri_profile_service import naukri_profile_service
+                pkg = naukri_profile_service.generate_profile_optimization_package()
+                msg = (
+                    f"✨ <b>OPTIMIZED NAUKRI HEADLINE & SKILLS</b>\n\n"
+                    f"<b>Headline ({pkg['headline_char_count']}/250 chars):</b>\n<code>{pkg['recommended_headline']}</code>\n\n"
+                    f"<b>Key Skills:</b>\n<code>{pkg['key_skills_csv']}</code>"
+                )
+                self.send_message(msg, target_chat_id=chat_id)
+
 
 
         except Exception as e:

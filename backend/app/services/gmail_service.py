@@ -291,6 +291,28 @@ class GmailMonitoringService:
                 )
                 db.add(offer)
 
+            # 6. Check Naukri specific email events
+            if "naukri" in sender_email.lower() or "naukri" in subject.lower():
+                from app.models.schema import NaukriNotificationEvent
+                n_event = NaukriNotificationEvent(
+                    message_id=message_id,
+                    event_category=classification.category,
+                    company_name=company_name,
+                    job_title=classification.job_title,
+                    raw_subject=subject[:500]
+                )
+                db.add(n_event)
+
+                if "neo" in subject.lower() or "auto-applied" in body.lower() or "naukri neo" in body.lower():
+                    from app.services.naukri_neo_service import naukri_neo_service
+                    naukri_neo_service.record_neo_application_confirmation(
+                        email_message_id=message_id,
+                        job_title=classification.job_title or "Software Engineer",
+                        company_name=company_name,
+                        applied_at=dt
+                    )
+
+
             db.commit()
 
             return {

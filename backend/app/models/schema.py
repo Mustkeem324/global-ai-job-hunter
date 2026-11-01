@@ -825,3 +825,146 @@ class RecommendationEvidence(Base):
     confidence_score = Column(Float, default=0.0)
     created_at = Column(DateTime, default=utcnow)
 
+# =========================================================
+# PHASE 7: NAUKRI.COM INTEGRATION & NEO TRACKING MODELS
+# =========================================================
+
+class NaukriIntegrationSetting(Base):
+    __tablename__ = "naukri_integration_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    is_neo_enabled = Column(Boolean, default=False)
+    is_naukri360_pro = Column(Boolean, default=False)
+    email_alerts_enabled = Column(Boolean, default=True)
+    preferred_locations = Column(JSON, default=lambda: ["Delhi NCR", "Noida", "Gurugram", "Remote India"])
+    target_roles = Column(JSON, default=lambda: [
+        "AI Trainer", "LLM Evaluator", "AI Coding Evaluator", "Full-Stack Developer", 
+        "AI Engineer", "Generative AI Engineer", "Python Developer"
+    ])
+    auto_sync_interval_hours = Column(Integer, default=6)
+    min_match_score = Column(Integer, default=85)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    user = relationship("User")
+
+class NaukriJobImport(Base):
+    __tablename__ = "naukri_job_imports"
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("job_postings.id"), nullable=False)
+    import_source = Column(String(50), default="USER_PROVIDED_URL") # USER_PROVIDED_URL, EMAIL_ALERT, OFFICIAL_API, ATS_REDIRECT
+    raw_url = Column(String(1000), nullable=False)
+    original_title = Column(String(255), nullable=True)
+    original_company = Column(String(255), nullable=True)
+    original_location = Column(String(255), nullable=True)
+    raw_payload = Column(JSON, default=dict)
+    parsed_at = Column(DateTime, default=utcnow)
+
+    job = relationship("JobPosting")
+
+class NaukriJobReference(Base):
+    __tablename__ = "naukri_job_references"
+    id = Column(Integer, primary_key=True, index=True)
+    naukri_job_id_str = Column(String(100), unique=True, index=True, nullable=False)
+    canonical_job_id = Column(Integer, ForeignKey("job_postings.id"), nullable=False)
+    employer_ats_type = Column(String(50), nullable=True) # greenhouse, lever, ashby, workday, direct
+    employer_ats_url = Column(String(1000), nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    job = relationship("JobPosting")
+
+class NaukriProfileRecommendation(Base):
+    __tablename__ = "naukri_profile_recommendations"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    recommended_headline = Column(String(250), nullable=False) # Naukri 250 character limit
+    profile_summary = Column(Text, nullable=False)
+    key_skills_csv = Column(String(500), nullable=False)
+    project_highlights = Column(JSON, default=list)
+    notice_period_text = Column(String(100), default="Immediate / 15 Days")
+    target_ctc_text = Column(String(100), default="Competitive / Market Standard")
+    status = Column(String(50), default="ACTIVE")
+    generated_at = Column(DateTime, default=utcnow)
+
+    user = relationship("User")
+
+class NaukriResumeVersion(Base):
+    __tablename__ = "naukri_resume_versions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    version_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    optimization_focus = Column(String(100), default="AI_TRAINING_AND_FULLSTACK")
+    ats_score = Column(Float, default=95.0)
+    created_at = Column(DateTime, default=utcnow)
+
+    user = relationship("User")
+
+class NaukriApplicationSource(Base):
+    __tablename__ = "naukri_application_sources"
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=False, unique=True)
+    source_type = Column(String(50), nullable=False) 
+    # NAUKRI_NEO, NAUKRI_MANUAL, EXTERNAL_ATS, JOB_HUNTER_AUTHORIZED_AUTO, UNKNOWN_SOURCE
+    source_metadata = Column(JSON, default=dict)
+    verified_by_candidate = Column(Boolean, default=False)
+    recorded_at = Column(DateTime, default=utcnow)
+
+    application = relationship("Application")
+
+class NaukriApplicationEvent(Base):
+    __tablename__ = "naukri_application_events"
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=False)
+    event_type = Column(String(100), nullable=False) 
+    # PREPARED, SHORTLISTED, RECRUITER_CONTACT, NEO_CONFIRMED, REJECTED, SUBMITTED
+    event_details = Column(JSON, default=dict)
+    timestamp = Column(DateTime, default=utcnow)
+
+    application = relationship("Application")
+
+class NaukriNeoStatusRecord(Base):
+    __tablename__ = "naukri_neo_status_records"
+    id = Column(Integer, primary_key=True, index=True)
+    confirmation_email_id = Column(String(255), unique=True, nullable=True, index=True)
+    job_title = Column(String(255), nullable=False)
+    company_name = Column(String(255), nullable=False)
+    neo_applied_at = Column(DateTime, default=utcnow)
+    canonical_application_id = Column(Integer, ForeignKey("applications.id"), nullable=True)
+    matched_confidence = Column(Float, default=1.0)
+    created_at = Column(DateTime, default=utcnow)
+
+    application = relationship("Application")
+
+class NaukriNotificationEvent(Base):
+    __tablename__ = "naukri_notification_events"
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(String(255), unique=True, nullable=False, index=True)
+    event_category = Column(String(100), nullable=False) 
+    # JOB_RECOMMENDATION, NEO_AUTO_APPLY_CONFIRMATION, SHORTLIST, INTERVIEW, REJECTION
+    company_name = Column(String(255), nullable=True)
+    job_title = Column(String(255), nullable=True)
+    raw_subject = Column(String(500), nullable=True)
+    processed_at = Column(DateTime, default=utcnow)
+
+class NaukriSyncRun(Base):
+    __tablename__ = "naukri_sync_runs"
+    id = Column(Integer, primary_key=True, index=True)
+    sync_type = Column(String(50), default="GMAIL_ALERTS") # GMAIL_ALERTS, NEO_RECONCILIATION, MANUAL_BATCH
+    imported_jobs_count = Column(Integer, default=0)
+    reconciled_applications_count = Column(Integer, default=0)
+    errors_count = Column(Integer, default=0)
+    status = Column(String(50), default="SUCCESS")
+    completed_at = Column(DateTime, default=utcnow)
+
+class NaukriApiPermission(Base):
+    __tablename__ = "naukri_api_permissions"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(String(100), nullable=False)
+    has_official_partner_access = Column(Boolean, default=False)
+    partner_license_tier = Column(String(100), default="COMMUNITY_ASSISTED")
+    token_expires_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=utcnow)
+
+

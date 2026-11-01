@@ -280,4 +280,76 @@ export async function fetchTargetingRecommendations() {
   return res.json();
 }
 
+// =========================================================
+// PHASE 7: NAUKRI.COM INTEGRATION & NEO TRACKING APIS
+// =========================================================
+
+export async function fetchNaukriCapabilities() {
+  const res = await fetch(`${API_BASE}/naukri/capabilities`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function fetchNaukriHealth() {
+  const res = await fetch(`${API_BASE}/naukri/health`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function importNaukriUrl(url: string, custom_title?: string, custom_company?: string) {
+  const res = await fetch(`${API_BASE}/naukri/import-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, custom_title, custom_company })
+  });
+  return res.json();
+}
+
+export async function prepareNaukriJob(jobId: number) {
+  const res = await fetch(`${API_BASE}/naukri/jobs/${jobId}/prepare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function prepareNaukriBatch(size: number = 10, minScore: number = 85) {
+  const res = await fetch(`${API_BASE}/naukri/batch/prepare?size=${size}&min_score=${minScore}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function fetchNaukriProfilePackage() {
+  const res = await fetch(`${API_BASE}/naukri/profile-package`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function fetchNaukriNeoSettings() {
+  const res = await fetch(`${API_BASE}/naukri/neo/settings`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function updateNaukriNeoSettings(isNeoEnabled: boolean = true, isPro: boolean = false) {
+  const res = await fetch(`${API_BASE}/naukri/neo/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_neo_enabled: isNeoEnabled, is_naukri360_pro: isPro })
+  });
+  return res.json();
+}
+
+export async function fetchNaukriNeoRecords(limit: number = 20) {
+  const res = await fetch(`${API_BASE}/naukri/neo/records?limit=${limit}`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function syncNaukri() {
+  const res = await fetch(`${API_BASE}/naukri/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+
 
