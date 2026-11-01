@@ -476,6 +476,8 @@ class FollowupDraft(Base):
     sent_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utcnow)
 
+    application = relationship("Application")
+
 class SourceHealth(Base):
     __tablename__ = "source_health"
     id = Column(Integer, primary_key=True, index=True)
@@ -603,3 +605,223 @@ class BatchExecutionEvent(Base):
     timestamp = Column(DateTime, default=utcnow)
 
     batch = relationship("ApplicationBatch", back_populates="events")
+
+# =========================================================
+# PHASE 6: RECRUITER INTELLIGENCE, CRM & INTERVIEW MODELS
+# =========================================================
+
+class RecruiterContact(Base):
+    __tablename__ = "recruiter_contacts"
+    id = Column(Integer, primary_key=True, index=True)
+    recruiter_id = Column(String(100), unique=True, index=True, nullable=False)
+    company = Column(String(255), nullable=False, index=True)
+    job_position = Column(String(255), nullable=True)
+    contact_name = Column(String(255), nullable=False)
+    professional_title = Column(String(255), nullable=True)
+    email = Column(String(255), nullable=False, index=True)
+    phone = Column(String(50), nullable=True)
+    linkedin_url = Column(String(255), nullable=True)
+    communication_channel = Column(String(50), default="EMAIL") # EMAIL, LINKEDIN, PORTAL
+    follow_up_status = Column(String(50), default="IDLE") # IDLE, FOLLOWUP_DRAFTED, FOLLOWUP_SENT, SNOOZED, OPTED_OUT
+    next_permitted_action = Column(String(100), default="AWAIT_REPLY")
+    communication_restrictions = Column(String(255), nullable=True) # e.g. "Do not contact before 14 days"
+    is_no_reply = Column(Boolean, default=False)
+    first_interaction_at = Column(DateTime, default=utcnow)
+    last_interaction_at = Column(DateTime, default=utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    interactions = relationship("RecruiterInteraction", back_populates="recruiter_contact", cascade="all, delete-orphan")
+    interviews = relationship("InterviewEvent", back_populates="recruiter_contact")
+    assessments = relationship("AssessmentEvent", back_populates="recruiter_contact")
+    offers = relationship("OfferRecord", back_populates="recruiter_contact")
+
+class RecruiterInteraction(Base):
+    __tablename__ = "recruiter_interactions"
+    id = Column(Integer, primary_key=True, index=True)
+    recruiter_contact_id = Column(Integer, ForeignKey("recruiter_contacts.id"), nullable=False)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=True)
+    interaction_type = Column(String(100), nullable=False) # EMAIL_RECEIVED, EMAIL_SENT, INTERVIEW_SCHEDULED, REJECTION_RECEIVED, OFFER_RECEIVED
+    direction = Column(String(20), default="INBOUND") # INBOUND, OUTBOUND
+    subject = Column(String(500), nullable=True)
+    body_summary = Column(Text, nullable=True)
+    message_id = Column(String(255), nullable=True, index=True)
+    thread_id = Column(String(255), nullable=True, index=True)
+    occurred_at = Column(DateTime, default=utcnow)
+    created_at = Column(DateTime, default=utcnow)
+
+    recruiter_contact = relationship("RecruiterContact", back_populates="interactions")
+    application = relationship("Application")
+
+class RecruiterMessageMatch(Base):
+    __tablename__ = "recruiter_message_matches"
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(String(255), nullable=False, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=True)
+    recruiter_contact_id = Column(Integer, ForeignKey("recruiter_contacts.id"), nullable=True)
+    match_type = Column(String(50), nullable=False) # EXACT_RECEIPT_ID, THREAD_ID, COMPANY_TITLE_DOMAIN, AMBIGUOUS
+    confidence = Column(Float, default=0.0)
+    evidence_notes = Column(Text, nullable=True)
+    status = Column(String(50), default="CONFIRMED") # CONFIRMED, UNDER_REVIEW, DISMISSED
+    created_at = Column(DateTime, default=utcnow)
+
+    application = relationship("Application")
+    recruiter_contact = relationship("RecruiterContact")
+
+class FollowupRecommendation(Base):
+    __tablename__ = "followup_recommendations"
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=False)
+    recruiter_contact_id = Column(Integer, ForeignKey("recruiter_contacts.id"), nullable=True)
+    recommendation_type = Column(String(50), nullable=False) # STATUS_FOLLOWUP, QUESTION_RESPONSE, ASSESSMENT_FOLLOWUP, INTERVIEW_CONFIRMATION, OFFER_DISCUSSION
+    priority = Column(String(20), default="MEDIUM") # HIGH, MEDIUM, LOW
+    suggested_date = Column(DateTime, nullable=False)
+    trigger_reason = Column(String(500), nullable=False)
+    status = Column(String(50), default="PENDING") # PENDING, APPROVED, REJECTED, SNOOZED, EXPIRED
+    created_at = Column(DateTime, default=utcnow)
+
+    application = relationship("Application")
+    recruiter_contact = relationship("RecruiterContact")
+
+class FollowupApproval(Base):
+    __tablename__ = "followup_approvals"
+    id = Column(Integer, primary_key=True, index=True)
+    followup_draft_id = Column(Integer, ForeignKey("followup_drafts.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String(50), nullable=False) # APPROVED, REJECTED, SNOOZED, EDITED
+    approved_by = Column(String(100), default="user_telegram")
+    modified_subject = Column(String(500), nullable=True)
+    modified_body = Column(Text, nullable=True)
+    approved_at = Column(DateTime, default=utcnow)
+
+    draft = relationship("FollowupDraft")
+    user = relationship("User")
+
+class InterviewEvent(Base):
+    __tablename__ = "interview_events"
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=False)
+    recruiter_contact_id = Column(Integer, ForeignKey("recruiter_contacts.id"), nullable=True)
+    job_id = Column(Integer, ForeignKey("job_postings.id"), nullable=True)
+    title = Column(String(255), nullable=False)
+    original_datetime_str = Column(String(100), nullable=True)
+    original_timezone = Column(String(50), default="UTC")
+    scheduled_at_kolkata = Column(DateTime, nullable=False, index=True)
+    duration_minutes = Column(Integer, default=45)
+    meeting_platform = Column(String(50), default="GOOGLE_MEET") # GOOGLE_MEET, ZOOM, TEAMS, CALENDLY, PHONE, IN_PERSON
+    meeting_url = Column(String(500), nullable=True)
+    tentative_or_confirmed = Column(String(20), default="CONFIRMED") # CONFIRMED, TENTATIVE
+    interviewer_names = Column(String(255), nullable=True)
+    documents_requested = Column(Text, nullable=True)
+    preparation_instructions = Column(Text, nullable=True)
+    google_calendar_event_id = Column(String(255), nullable=True)
+    google_calendar_synced = Column(Boolean, default=False)
+    status = Column(String(50), default="SCHEDULED") # SCHEDULED, RESCHEDULED, COMPLETED, CANCELLED
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    application = relationship("Application")
+    recruiter_contact = relationship("RecruiterContact", back_populates="interviews")
+    reminders = relationship("InterviewReminder", back_populates="interview", cascade="all, delete-orphan")
+
+class InterviewReminder(Base):
+    __tablename__ = "interview_reminders"
+    id = Column(Integer, primary_key=True, index=True)
+    interview_id = Column(Integer, ForeignKey("interview_events.id"), nullable=False)
+    reminder_type = Column(String(50), nullable=False) # 24_HOURS, 2_HOURS, 30_MINUTES
+    scheduled_for = Column(DateTime, nullable=False, index=True)
+    is_sent = Column(Boolean, default=False)
+    sent_at = Column(DateTime, nullable=True)
+    notification_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    interview = relationship("InterviewEvent", back_populates="reminders")
+
+class AssessmentEvent(Base):
+    __tablename__ = "assessment_events"
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=False)
+    recruiter_contact_id = Column(Integer, ForeignKey("recruiter_contacts.id"), nullable=True)
+    assessment_title = Column(String(255), nullable=False)
+    platform = Column(String(100), default="HACKERRANK") # HACKERRANK, CODESIGNAL, TAKE_HOME, OTHER
+    test_url = Column(String(500), nullable=True)
+    deadline_at = Column(DateTime, nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
+    instructions = Column(Text, nullable=True)
+    status = Column(String(50), default="PENDING") # PENDING, IN_PROGRESS, COMPLETED, EXPIRED
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    application = relationship("Application")
+    recruiter_contact = relationship("RecruiterContact", back_populates="assessments")
+
+class OfferRecord(Base):
+    __tablename__ = "offer_records"
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=False)
+    recruiter_contact_id = Column(Integer, ForeignKey("recruiter_contacts.id"), nullable=True)
+    company = Column(String(255), nullable=False)
+    position = Column(String(255), nullable=False)
+    base_salary = Column(String(100), nullable=True)
+    currency = Column(String(10), default="USD")
+    equity_details = Column(String(255), nullable=True)
+    signing_bonus = Column(String(100), nullable=True)
+    deadline_at = Column(DateTime, nullable=True)
+    status = Column(String(50), default="RECEIVED") # RECEIVED, UNDER_REVIEW, ACCEPTED, DECLINED, EXPIRED
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    application = relationship("Application")
+    recruiter_contact = relationship("RecruiterContact", back_populates="offers")
+
+class ApplicationConversionEvent(Base):
+    __tablename__ = "application_conversion_events"
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=False)
+    from_status = Column(String(50), nullable=False)
+    to_status = Column(String(50), nullable=False)
+    trigger_source = Column(String(100), default="RECRUITER_EMAIL") # RECRUITER_EMAIL, USER_INPUT, AGENT_ACTION, SYSTEM
+    event_details = Column(JSON, default=dict)
+    occurred_at = Column(DateTime, default=utcnow)
+
+    application = relationship("Application")
+
+class ResumeExperiment(Base):
+    __tablename__ = "resume_experiments"
+    id = Column(Integer, primary_key=True, index=True)
+    experiment_name = Column(String(255), nullable=False)
+    resume_version_id = Column(Integer, ForeignKey("resume_versions.id"), nullable=True)
+    role_category = Column(String(100), nullable=False)
+    total_applications = Column(Integer, default=0)
+    interviews_received = Column(Integer, default=0)
+    offers_received = Column(Integer, default=0)
+    response_rate = Column(Float, default=0.0)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utcnow)
+
+class AgentExecutionLog(Base):
+    __tablename__ = "agent_execution_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    agent_name = Column(String(100), nullable=False) # DiscoveryAgent, MatchingAgent, ApplicationAgent, etc.
+    permission_scope = Column(String(100), nullable=False)
+    action_taken = Column(String(255), nullable=False)
+    input_summary = Column(Text, nullable=True)
+    output_summary = Column(Text, nullable=True)
+    success = Column(Boolean, default=True)
+    error_message = Column(Text, nullable=True)
+    latency_ms = Column(Integer, default=0)
+    timestamp = Column(DateTime, default=utcnow)
+
+class RecommendationEvidence(Base):
+    __tablename__ = "recommendation_evidence"
+    id = Column(Integer, primary_key=True, index=True)
+    recommendation_id = Column(String(100), nullable=False, index=True)
+    evidence_type = Column(String(100), nullable=False) # FUNNEL_CONVERSION, ROLE_PERFORMANCE, ATS_SUCCESS_RATE
+    metric_key = Column(String(100), nullable=False)
+    sample_size = Column(Integer, default=0)
+    numerator = Column(Integer, default=0)
+    denominator = Column(Integer, default=0)
+    observation_text = Column(Text, nullable=False)
+    confidence_score = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=utcnow)
+

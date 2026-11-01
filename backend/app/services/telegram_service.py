@@ -128,6 +128,52 @@ class TelegramNotificationService:
         card = self.format_job_card(job, match_score)
         return self.send_message(card["text"], reply_markup=card["reply_markup"])
 
+    def format_recruiter_response_card(self, msg: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Phase 6 Module 5: Structured Recruiter Response Card
+        """
+        company = msg.get("company", "Employer")
+        role = msg.get("role", "Software Role")
+        recruiter = msg.get("recruiter", "Recruiting Team")
+        received_at = msg.get("received_at", "Recently")
+        cat = msg.get("category", "CORRESPONDENCE")
+        conf = msg.get("confidence", 0.90)
+        app_id = msg.get("application_id", "")
+        msg_id = msg.get("message_id", "")
+        date_str = msg.get("interview_date", "Pending Selection")
+        tz_str = msg.get("interview_timezone", "Asia/Kolkata")
+
+        text = (
+            f"📨 <b>GLOBAL JOB HUNTER AI</b>\n\n"
+            f"🎯 <b>RECRUITER RESPONSE DETECTED</b>\n\n"
+            f"🏢 <b>Company:</b> {company}\n"
+            f"💼 <b>Role:</b> {role}\n"
+            f"👤 <b>Recruiter:</b> {recruiter}\n"
+            f"🕒 <b>Email Received:</b> {received_at}\n\n"
+            f"📑 <b>Message Type:</b> <code>{cat}</code>\n"
+        )
+        if cat in ("INTERVIEW_INVITATION", "INTERVIEW_RESCHEDULE"):
+            text += f"📅 <b>Interview Date:</b> {date_str}\n🕒 <b>Interview Time:</b> {tz_str}\n"
+        text += (
+            f"🎯 <b>Confidence:</b> <b>{int(conf * 100)}%</b>\n\n"
+            f"<i>Choose an authorized response action below:</i>"
+        )
+
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "👁 View Email", "callback_data": f"msg:view:{msg_id}"},
+                    {"text": "✍️ Prepare Reply", "callback_data": f"reply:prepare:{app_id}"}
+                ],
+                [
+                    {"text": "📅 Review Interview", "callback_data": f"intv:prep:{app_id}"},
+                    {"text": "🤝 Mark Follow-Up", "callback_data": f"fup:mark:{app_id}"}
+                ]
+            ]
+        }
+        return {"text": text, "reply_markup": reply_markup}
+
+
     def notify_application_confirmed(self, app_id: int, job: Dict[str, Any], confirmation_id: str, applied_at: str) -> Dict[str, Any]:
         msg = (
             f"🚀 <b>GLOBAL JOB HUNTER AI</b>\n\n"
@@ -766,6 +812,204 @@ class TelegramNotificationService:
             finally:
                 db.close()
 
+        # =========================================================
+        # PHASE 6: RECRUITER INTELLIGENCE & INTERVIEW CONVERSION COMMANDS
+        # =========================================================
+        elif clean_cmd in ("/recruiters", "/recruiter"):
+            from app.services.recruiter_crm_service import recruiter_crm
+            contacts = recruiter_crm.list_contacts(limit=6)
+            if not contacts:
+                self.send_message("📇 <b>RECRUITER CRM:</b>\nNo verified recruiter contacts recorded yet. Contacts are automatically registered when employer emails are processed.", target_chat_id=chat_id)
+            else:
+                lines = [f"📇 <b>RECRUITER CRM DIRECTORY ({len(contacts)}):</b>\n"]
+                for c in contacts:
+                    lines.append(
+                        f"• <b>{c['contact_name']}</b> ({c['company']})\n"
+                        f"  Role: {c.get('job_position') or 'Technical Recruiter'}\n"
+                        f"  Email: <code>{c['email']}</code> | Status: <b>{c['follow_up_status']}</b>\n"
+                    )
+                self.send_message("\n".join(lines), target_chat_id=chat_id)
+
+        elif clean_cmd in ("/replies", "/responses"):
+            db = SessionLocal()
+            try:
+                from app.models.schema import RecruiterMessage
+                messages = db.query(RecruiterMessage).order_by(RecruiterMessage.id.desc()).limit(4).all()
+                if not messages:
+                    self.send_message("📬 <b>RECRUITER REPLIES:</b>\nNo employer emails logged yet.", target_chat_id=chat_id)
+                else:
+                    self.send_message(f"📬 <b>RECENT RECRUITER CORRESPONDENCE ({len(messages)}):</b>", target_chat_id=chat_id)
+                    for m in messages:
+                        card = self.format_recruiter_response_card({
+                            "company": m.sender_domain.capitalize(),
+                            "role": m.subject,
+                            "recruiter": m.sender_email,
+                            "received_at": m.received_at.strftime("%Y-%m-%d %H:%M UTC") if m.received_at else "Recently",
+                            "category": m.classification,
+                            "confidence": m.confidence,
+                            "application_id": m.application_id,
+                            "message_id": m.message_id
+                        })
+                        self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/followups", "/followup"):
+            from app.services.followup_agent import followup_agent
+            recs = followup_agent.scan_for_followup_recommendations()
+            db = SessionLocal()
+            try:
+                from app.models.schema import FollowupDraft
+                drafts = db.query(FollowupDraft).filter(FollowupDraft.status == "DRAFTED").limit(5).all()
+                if not recs and not drafts:
+                    self.send_message("🤝 <b>FOLLOW-UP AGENT:</b>\nAll applications are up to date. No follow-ups recommended at this time.", target_chat_id=chat_id)
+                else:
+                    lines = ["🤝 <b>PENDING FOLLOW-UP RECOMMENDATIONS:</b>\n"]
+                    for r in recs[:3]:
+                        lines.append(f"• <b>{r['company']} — {r['title']}</b>\n  Reason: {r['reason']}\n  Type: <code>{r['type']}</code>\n")
+                    if drafts:
+                        lines.append(f"\n📝 <b>DRAFTED EMAILS AWAITING YOUR APPROVAL ({len(drafts)}):</b>")
+                        for d in drafts:
+                            app = d.application
+                            lines.append(f"• Draft #{d.id} for <b>{app.job_posting.company_name if app else 'Employer'}</b>\n  Use /reviewreply to inspect and approve.\n")
+                    self.send_message("\n".join(lines), target_chat_id=chat_id)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/reviewreply", "/reviewfollowup"):
+            db = SessionLocal()
+            try:
+                from app.models.schema import FollowupDraft
+                draft = db.query(FollowupDraft).filter(FollowupDraft.status == "DRAFTED").order_by(FollowupDraft.id.desc()).first()
+                if not draft:
+                    self.send_message("📝 No pending follow-up drafts awaiting review. Use /followups to generate recommendations.", target_chat_id=chat_id)
+                else:
+                    app = draft.application
+                    comp = app.job_posting.company_name if app else "Employer"
+                    msg = (
+                        f"📝 <b>FOLLOW-UP DRAFT REVIEW (Draft #{draft.id})</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"<b>Employer:</b> {comp}\n"
+                        f"<b>Subject:</b> {draft.subject}\n\n"
+                        f"<b>Proposed Body:</b>\n"
+                        f"<i>{draft.body_text}</i>\n\n"
+                        f"⚠️ <i>Strict Human Approval Policy: Outbound emails are NEVER sent without explicit approval.</i>"
+                    )
+                    markup = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "✅ Approve & Send", "callback_data": f"fup:appr:{draft.id}"},
+                                {"text": "❌ Dismiss", "callback_data": f"fup:rej:{draft.id}"}
+                            ],
+                            [
+                                {"text": "⏰ Snooze 5 Days", "callback_data": f"fup:snz:{draft.id}"}
+                            ]
+                        ]
+                    }
+                    self.send_message(msg, target_chat_id=chat_id, reply_markup=markup)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/interviews", "/interview"):
+            from app.services.interview_intelligence_service import interview_intelligence_service
+            intvs = interview_intelligence_service.list_upcoming_interviews(limit=5)
+            if not intvs:
+                self.send_message("📅 <b>INTERVIEW CALENDAR:</b>\nNo upcoming interviews currently scheduled.", target_chat_id=chat_id)
+            else:
+                self.send_message(f"📅 <b>UPCOMING INTERVIEWS ({len(intvs)}):</b>", target_chat_id=chat_id)
+                for iv in intvs:
+                    card_text = (
+                        f"💼 <b>{iv['position']} at {iv['company']}</b>\n"
+                        f"🕒 <b>Scheduled:</b> {iv['scheduled_kolkata']}\n"
+                        f"💻 <b>Platform:</b> {iv['platform']}\n"
+                        f"🔗 <b>Meeting:</b> <a href='{iv['meeting_url']}'>Open Link</a>\n"
+                        f"📌 <b>Status:</b> <code>{iv['status']}</code> ({iv['tentative_or_confirmed']})"
+                    )
+                    markup = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "🧠 AI Interview Prep", "callback_data": f"intv:prep:{iv['application_id']}"},
+                                {"text": "📅 Sync Calendar", "callback_data": f"intv:cal:{iv['id']}"}
+                            ]
+                        ]
+                    }
+                    self.send_message(card_text, target_chat_id=chat_id, reply_markup=markup)
+
+        elif clean_cmd in ("/assessments", "/assessment", "/tests"):
+            db = SessionLocal()
+            try:
+                from app.models.schema import AssessmentEvent
+                tests = db.query(AssessmentEvent).filter(AssessmentEvent.status == "PENDING").limit(5).all()
+                if not tests:
+                    self.send_message("💻 <b>ASSESSMENT TRACKER:</b>\nNo pending technical assessments.", target_chat_id=chat_id)
+                else:
+                    lines = [f"💻 <b>PENDING CODING ASSESSMENTS ({len(tests)}):</b>\n"]
+                    for t in tests:
+                        app = t.application
+                        comp = app.job_posting.company_name if app else "Employer"
+                        lines.append(
+                            f"• <b>{t.assessment_title}</b> ({comp})\n"
+                            f"  Platform: {t.platform}\n"
+                            f"  Link: <a href='{t.test_url}'>Start Assessment</a>\n"
+                        )
+                    self.send_message("\n".join(lines), target_chat_id=chat_id)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/offers", "/offer"):
+            db = SessionLocal()
+            try:
+                from app.models.schema import OfferRecord
+                offers = db.query(OfferRecord).all()
+                if not offers:
+                    self.send_message("🎉 <b>OFFER TRACKER:</b>\nNo verified employment offers recorded yet.", target_chat_id=chat_id)
+                else:
+                    lines = [f"🎉 <b>VERIFIED EMPLOYMENT OFFERS ({len(offers)}):</b>\n"]
+                    for o in offers:
+                        lines.append(
+                            f"• <b>{o.company} — {o.position}</b>\n"
+                            f"  Compensation: <b>{o.base_salary} {o.currency}</b>\n"
+                            f"  Status: <code>{o.status}</code>\n"
+                        )
+                    self.send_message("\n".join(lines), target_chat_id=chat_id)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/pipeline",):
+            from app.services.recruiter_analytics_service import recruiter_analytics
+            metrics = recruiter_analytics.calculate_funnel_metrics()
+            pipe_msg = (
+                f"📈 <b>END-TO-END RECRUITMENT PIPELINE</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"• <b>Confirmed Submitted:</b> {metrics['confirmed_submitted']}\n"
+                f"• <b>Employer Acknowledged:</b> {metrics['employer_acknowledgments']}\n"
+                f"• <b>Under Active Review:</b> {metrics['under_review']}\n"
+                f"• <b>Coding Assessments:</b> {metrics['assessments_invited']}\n"
+                f"• <b>Interviews Invited:</b> {metrics['interviews_invited']}\n"
+                f"• <b>Offers Received:</b> {metrics['offers_received']}\n"
+                f"• <b>Rejections:</b> {metrics['rejections_received']}\n\n"
+                f"Use /conversion for full conversion percentages."
+            )
+            self.send_message(pipe_msg, target_chat_id=chat_id)
+
+        elif clean_cmd in ("/conversion", "/funnel", "/analytics_recruiter"):
+            from app.services.recruiter_analytics_service import recruiter_analytics
+            metrics = recruiter_analytics.calculate_funnel_metrics()
+            rates = metrics["rates"]
+            conv_msg = (
+                f"📊 <b>APPLICATION-TO-OFFER CONVERSION ANALYTICS</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"<b>Response Rate:</b> {rates['response_rate']['percentage']}%\n"
+                f"  └ <i>{rates['response_rate']['numerator']} responses / {rates['response_rate']['denominator']} submitted</i>\n\n"
+                f"<b>Interview Rate:</b> {rates['interview_rate']['percentage']}%\n"
+                f"  └ <i>{rates['interview_rate']['numerator']} interviews / {rates['interview_rate']['denominator']} submitted</i>\n\n"
+                f"<b>Offer Rate:</b> {rates['offer_rate']['percentage']}%\n"
+                f"  └ <i>{rates['offer_rate']['numerator']} offers / {rates['offer_rate']['denominator']} submitted</i>\n\n"
+                f"<i>Ground truth data grounded directly in database records.</i>"
+            )
+            self.send_message(conv_msg, target_chat_id=chat_id)
+
+
         else:
             # If not a slash command, treat plain text query (e.g. "python", "ai developer") as search
             search_query = text
@@ -1167,6 +1411,65 @@ class TelegramNotificationService:
                     f"<i>Settings synchronized across Telegram and Web Dashboard.</i>",
                     target_chat_id=chat_id
                 )
+
+            elif data.startswith("fup:appr:"):
+                draft_id = int(data.split(":", 2)[2])
+                from app.services.followup_agent import followup_agent
+                self.answer_callback_query(query_id, text="Authorizing follow-up dispatch...")
+                res = followup_agent.review_and_approve_followup(draft_id, approved_by="telegram_user")
+                if res.get("success"):
+                    self.send_message(f"✅ <b>FOLLOW-UP DISPATCHED:</b>\n{res['message']}", target_chat_id=chat_id)
+                else:
+                    self.send_message(f"⚠️ {res.get('message')}", target_chat_id=chat_id)
+
+            elif data.startswith("fup:rej:"):
+                draft_id = int(data.split(":", 2)[2])
+                from app.services.followup_agent import followup_agent
+                self.answer_callback_query(query_id, text="Dismissing follow-up...")
+                res = followup_agent.reject_followup(draft_id)
+                self.send_message("❌ Follow-up draft dismissed.", target_chat_id=chat_id)
+
+            elif data.startswith("fup:snz:"):
+                draft_id = int(data.split(":", 2)[2])
+                from app.services.followup_agent import followup_agent
+                self.answer_callback_query(query_id, text="Snoozing follow-up...")
+                res = followup_agent.snooze_followup(draft_id, days=5)
+                self.send_message(f"⏰ {res['message']}", target_chat_id=chat_id)
+
+            elif data.startswith("intv:prep:"):
+                app_id = int(data.split(":", 2)[2])
+                from app.services.interview_intelligence_service import interview_intelligence_service
+                self.answer_callback_query(query_id, text="Generating personalized AI interview prep...")
+                prep = interview_intelligence_service.generate_interview_preparation(app_id)
+                if prep.get("success"):
+                    content = prep["prep_content"]
+                    focus_items = "\n".join([f"• {f}" for f in content["key_focus_areas"]])
+                    qa = content.get("sample_questions_and_grounded_answers", [])
+                    qa_str = ""
+                    if qa:
+                        first_q = qa[0]
+                        qa_str = f"\n\n<b>Practice Q:</b> {first_q['question']}\n\n<b>Grounded Answer:</b>\n<i>{first_q['suggested_answer']}</i>"
+                    
+                    prep_msg = (
+                        f"🧠 <b>PERSONALIZED INTERVIEW PREPARATION</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"<b>Role:</b> {prep['role']} at {prep['company']}\n"
+                        f"<b>Domain:</b> <code>{prep['domain']}</code>\n"
+                        f"<b>Candidate:</b> {prep['candidate']}\n\n"
+                        f"<b>Key Focus Areas:</b>\n{focus_items}"
+                        f"{qa_str}"
+                    )
+                    self.send_message(prep_msg, target_chat_id=chat_id)
+                else:
+                    self.send_message(f"⚠️ {prep.get('message')}", target_chat_id=chat_id)
+
+            elif data.startswith("intv:cal:"):
+                intv_id = int(data.split(":", 2)[2])
+                from app.services.interview_intelligence_service import interview_intelligence_service
+                self.answer_callback_query(query_id, text="Syncing Google Calendar...")
+                cal_res = interview_intelligence_service.stage_google_calendar_event(intv_id)
+                self.send_message(f"📅 {cal_res['message']}", target_chat_id=chat_id)
+
 
         except Exception as e:
             print(f"Error handling callback query: {e}")

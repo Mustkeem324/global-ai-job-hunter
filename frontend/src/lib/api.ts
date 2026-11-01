@@ -188,3 +188,96 @@ export async function stopBatch(batchId: string) {
   return res.json();
 }
 
+// =========================================================
+// PHASE 6: RECRUITER INTELLIGENCE & CONVERSION APIS
+// =========================================================
+
+export async function fetchRecruiterContacts(company?: string, status?: string) {
+  const query = new URLSearchParams();
+  if (company) query.append("company", company);
+  if (status) query.append("status", status);
+  const res = await fetch(`${API_BASE}/recruiter/contacts?${query.toString()}`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function fetchRecruiterDetail(contactId: number) {
+  const res = await fetch(`${API_BASE}/recruiter/contacts/${contactId}`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function updateContactRestrictions(contactId: number, restrictions: string, optOut: boolean = false) {
+  const res = await fetch(`${API_BASE}/recruiter/contacts/${contactId}/restrictions`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ restrictions, opt_out: optOut })
+  });
+  return res.json();
+}
+
+export async function fetchFollowups() {
+  const res = await fetch(`${API_BASE}/recruiter/followups`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function generateFollowupDraft(recId: number) {
+  const res = await fetch(`${API_BASE}/recruiter/followups/${recId}/generate-draft`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function approveFollowupDraft(draftId: number, data: { approved_by?: string; modified_subject?: string; modified_body?: string } = {}) {
+  const res = await fetch(`${API_BASE}/recruiter/followups/drafts/${draftId}/approve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+export async function rejectFollowupDraft(draftId: number, reason: string = "Dismissed by user") {
+  const res = await fetch(`${API_BASE}/recruiter/followups/drafts/${draftId}/reject?reason=${encodeURIComponent(reason)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function snoozeFollowupDraft(draftId: number, days: number = 5) {
+  const res = await fetch(`${API_BASE}/recruiter/followups/drafts/${draftId}/snooze?days=${days}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function fetchInterviews(limit: number = 20) {
+  const res = await fetch(`${API_BASE}/recruiter/interviews?limit=${limit}`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function syncInterviewCalendar(interviewId: number) {
+  const res = await fetch(`${API_BASE}/recruiter/interviews/${interviewId}/calendar-sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function fetchInterviewPrep(applicationId: number, mode: string = "technical_qa") {
+  const res = await fetch(`${API_BASE}/recruiter/interviews/${applicationId}/prep?mode=${mode}`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function fetchRecruiterPipeline() {
+  const res = await fetch(`${API_BASE}/recruiter/pipeline`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function fetchTargetingRecommendations() {
+  const res = await fetch(`${API_BASE}/recruiter/recommendations`, { cache: "no-store" });
+  return res.json();
+}
+
+

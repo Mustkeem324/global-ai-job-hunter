@@ -53,6 +53,27 @@ class Settings(BaseSettings):
         "AUTHORIZED_APPLICATION_SOURCES", 
         "mock_ats,greenhouse_sandbox"
     )
+
+    # Phase 6: Recruiter Response & Interview Management Settings
+    RECRUITER_MONITORING_ENABLED: bool = os.getenv("RECRUITER_MONITORING_ENABLED", "true").lower() in ("true", "1")
+    GMAIL_SYNC_ENABLED: bool = os.getenv("GMAIL_SYNC_ENABLED", "false").lower() in ("true", "1")
+    GMAIL_OAUTH_CLIENT_ID: str = os.getenv("GMAIL_OAUTH_CLIENT_ID", "")
+    GMAIL_OAUTH_CLIENT_SECRET: str = os.getenv("GMAIL_OAUTH_CLIENT_SECRET", "")
+
+    FOLLOWUP_RECOMMENDATIONS_ENABLED: bool = os.getenv("FOLLOWUP_RECOMMENDATIONS_ENABLED", "true").lower() in ("true", "1")
+    AUTO_SEND_RECRUITER_EMAILS: bool = os.getenv("AUTO_SEND_RECRUITER_EMAILS", "false").lower() in ("true", "1")
+    DEFAULT_FOLLOWUP_DAYS: int = int(os.getenv("DEFAULT_FOLLOWUP_DAYS", "10"))
+    MAX_FOLLOWUPS_PER_APPLICATION: int = int(os.getenv("MAX_FOLLOWUPS_PER_APPLICATION", "2"))
+
+    INTERVIEW_MONITORING_ENABLED: bool = os.getenv("INTERVIEW_MONITORING_ENABLED", "true").lower() in ("true", "1")
+    GOOGLE_CALENDAR_ENABLED: bool = os.getenv("GOOGLE_CALENDAR_ENABLED", "false").lower() in ("true", "1")
+    INTERVIEW_TIMEZONE: str = os.getenv("INTERVIEW_TIMEZONE", "Asia/Kolkata")
+    INTERVIEW_REMINDER_HOURS: str = os.getenv("INTERVIEW_REMINDER_HOURS", "24,2")
+    INTERVIEW_REMINDER_MINUTES: int = int(os.getenv("INTERVIEW_REMINDER_MINUTES", "30"))
+
+    APPLICATION_ANALYTICS_ENABLED: bool = os.getenv("APPLICATION_ANALYTICS_ENABLED", "true").lower() in ("true", "1")
+    AI_RECOMMENDATIONS_ENABLED: bool = os.getenv("AI_RECOMMENDATIONS_ENABLED", "true").lower() in ("true", "1")
+
     
     class Config:
         env_file = ".env"
