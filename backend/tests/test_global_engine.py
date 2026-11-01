@@ -90,11 +90,12 @@ def test_telegram_commands_and_job_cards():
     assert "❌ Skip" in buttons
     assert "⭐ Save Job" in buttons
 
+    import uuid
     # Test callback queries for skip and save
     telegram_service.handle_incoming_update({
         "update_id": 111111,
         "callback_query": {
-            "id": "q_save",
+            "id": f"q_save_{uuid.uuid4().hex[:8]}",
             "from": {"id": 12345678},
             "data": f"save:{job.id}"
         }

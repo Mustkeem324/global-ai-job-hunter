@@ -329,28 +329,56 @@ class TelegramNotificationService:
                 db.close()
 
         elif clean_cmd in ("/filters", "/filter", "/preferences"):
+            india_label = "🟢 India-Only: ON" if getattr(settings, 'RESTRICT_TO_INDIA_ELIGIBLE', True) else "⚪ India-Only: OFF"
+            filt_markup = {
+                "inline_keyboard": [
+                    [
+                        {"text": india_label, "callback_data": "cfg:toggle_india"},
+                        {"text": f"Threshold: {settings.MIN_MATCH_SCORE}%", "callback_data": "cfg:cycle_score"}
+                    ],
+                    [
+                        {"text": "⚙️ Open Web Settings", "url": "http://localhost:3000/settings"}
+                    ]
+                ]
+            }
             filt_msg = (
                 f"⚙️ <b>CURRENT SEARCH PREFERENCES & FILTERS</b>\n\n"
                 f"• <b>Default Applicant Location:</b> India (Asia/Kolkata)\n"
-                f"• <b>Minimum Match Score:</b> 85 / 100\n"
+                f"• <b>Minimum Match Threshold:</b> <b>{settings.MIN_MATCH_SCORE} / 100</b>\n"
+                f"• <b>India-Eligible Filter:</b> {'🟢 Strictly Active' if getattr(settings, 'RESTRICT_TO_INDIA_ELIGIBLE', True) else '⚪ Showing All Locations'}\n"
                 f"• <b>Workplace Type:</b> 100% Worldwide Remote\n"
                 f"• <b>Employment Types:</b> Full-Time, Contract, Freelance\n"
-                f"• <b>ATS Allowlist:</b> Greenhouse, Lever, Ashby, Remotive, Himalayas, Jobicy\n\n"
-                f"Adjust filters in Web Dashboard: http://localhost:3000/settings"
+                f"• <b>Connected Feeds:</b> Greenhouse, Lever, Ashby, Remotive, Himalayas, Jobicy, Arbeitnow\n\n"
+                f"<i>Tap below to toggle settings instantly:</i>"
             )
-            self.send_message(filt_msg, target_chat_id=chat_id)
+            self.send_message(filt_msg, target_chat_id=chat_id, reply_markup=filt_markup)
 
         elif clean_cmd in ("/autoapply", "/apply"):
             status_text = "🟢 Enabled (Authorized Allowlist Only)" if settings.AUTO_APPLY_ENABLED else "🟡 Supervised (Review Required)"
+            aa_toggle_label = "⚡ Auto-Apply: ON" if settings.AUTO_APPLY_ENABLED else "⚡ Auto-Apply: OFF"
+            aa_markup = {
+                "inline_keyboard": [
+                    [
+                        {"text": aa_toggle_label, "callback_data": "cfg:toggle_auto"},
+                        {"text": "📋 View Queue", "callback_data": "nav:queue"}
+                    ],
+                    [
+                        {"text": f"{'🔘' if settings.MIN_MATCH_SCORE == 80 else '⚪'} Min 80%", "callback_data": "cfg:score_80"},
+                        {"text": f"{'🔘' if settings.MIN_MATCH_SCORE == 85 else '⚪'} Min 85%", "callback_data": "cfg:score_85"},
+                        {"text": f"{'🔘' if settings.MIN_MATCH_SCORE == 90 else '⚪'} Min 90%", "callback_data": "cfg:score_90"}
+                    ]
+                ]
+            }
             aa_msg = (
                 f"⚡ <b>APPLICATION AUTOMATION SETTINGS</b>\n\n"
                 f"• <b>Auto-Apply Mode:</b> {status_text}\n"
-                f"• <b>Max Daily Applications:</b> 10\n"
-                f"• <b>Strict Evidence Requirement:</b> Mandatory Authoritative Receipt\n"
+                f"• <b>Min Match Score:</b> {settings.MIN_MATCH_SCORE}%\n"
+                f"• <b>Max Daily Applications:</b> {settings.MAX_DAILY_APPLICATIONS}\n"
+                f"• <b>Strict Evidence Requirement:</b> Mandatory Authoritative Receipt (CONF-XXXXX)\n"
                 f"• <b>Permitted Submission Channels:</b> Sandbox ATS & Authorized Allowlist\n\n"
-                f"Configure allowlist and policy at http://localhost:3000/settings"
+                f"<i>Toggle options directly below:</i>"
             )
-            self.send_message(aa_msg, target_chat_id=chat_id)
+            self.send_message(aa_msg, target_chat_id=chat_id, reply_markup=aa_markup)
 
         elif clean_cmd in ("/applications", "/application", "/apps", "/app", "/history"):
             db = SessionLocal()
@@ -374,23 +402,16 @@ class TelegramNotificationService:
         elif clean_cmd in ("/pending", "/queue", "/review"):
             db = SessionLocal()
             try:
+                from app.services.approval_service import approval_service
                 pending = db.query(Application).filter(Application.status == "AWAITING_APPROVAL").all()
                 if not pending:
                     self.send_message("✅ <b>Queue clear!</b> No applications currently awaiting approval.", target_chat_id=chat_id)
                 else:
                     self.send_message(f"📋 <b>APPLICATIONS AWAITING REVIEW ({len(pending)}):</b>", target_chat_id=chat_id)
                     for p in pending:
-                        job = p.job_posting
-                        card = self.format_job_card({
-                            "id": job.id,
-                            "company_name": job.company_name,
-                            "title": job.title,
-                            "location": job.location,
-                            "employment_type": job.employment_type,
-                            "compensation_text": job.compensation_text,
-                            "application_url": job.application_url
-                        }, p.match_score)
-                        self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
+                        card = approval_service.format_approval_card(p.id)
+                        if card:
+                            self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
             finally:
                 db.close()
 
@@ -454,155 +475,138 @@ class TelegramNotificationService:
                     self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
 
     # =========================================================
-    # CALLBACK QUERY HANDLER (5 FUNCTIONAL BUTTONS)
+    # CALLBACK QUERY HANDLER (5 FUNCTIONAL BUTTONS + QUEUE & SETTINGS)
     # =========================================================
     def handle_callback_query(self, query: Dict[str, Any]):
         """
-        Handle all 5 inline button clicks:
-        - apply:{job_id} -> [🚀 Auto Apply]
+        Handle all inline button clicks:
+        - apply:{job_id} -> 15-Step One-Click Auto Apply engine
         - review:{job_id} -> [📄 Review Application]
-        - skip:{job_id} -> [❌ Skip]
-        - save:{job_id} -> [⭐ Save Job]
+        - appr:{app_id} -> [✅ Approve] authorize staged application
+        - edit:{app_id} -> [✏️ Edit] redirect to web queue
+        - rej:{app_id} -> [❌ Reject] cancel staged application
+        - skip:{job_id} -> [❌ Skip] dismiss card
+        - save:{job_id} -> [⭐ Save] save job bookmark
+        - nav:queue -> load approval queue
+        - cfg:... -> toggle settings
         """
-        query_id = query.get("id")
+        query_id = str(query.get("id"))
         data = query.get("data", "")
+        sender = query.get("from", {})
+        sender_id = str(sender.get("id", ""))
         chat_id = str(query.get("message", {}).get("chat", {}).get("id"))
 
         from app.core.database import SessionLocal
         from app.models.schema import (
-            JobPosting, Application, JobMatch, CandidateProfile, User, SubmissionEvidence, ApplicationEvent
+            JobPosting, Application, JobMatch, CandidateProfile,
+            TelegramCallbackAction, AutomationSetting
         )
-        from app.core.state_machine import ApplicationStatus, ApplicationMode
-        from app.services.document_generator import document_generator
+        from app.services.auto_apply_engine import auto_apply_engine
+        from app.services.approval_service import approval_service
 
         db = SessionLocal()
         try:
+            # Replay protection: check if callback_id was already handled
+            existing_action = db.query(TelegramCallbackAction).filter(TelegramCallbackAction.callback_id == query_id).first()
+            if existing_action:
+                self.answer_callback_query(query_id, text="Action already processed.")
+                return
+
+            def record_action(act: str, target: str, payload_data: dict = None):
+                cb_rec = TelegramCallbackAction(
+                    callback_id=query_id,
+                    user_id=sender_id,
+                    action=act,
+                    target_id=str(target),
+                    payload=payload_data or {}
+                )
+                db.add(cb_rec)
+                db.commit()
+
             if data.startswith("apply:"):
                 raw_id = data.split(":", 1)[1]
-                job = db.query(JobPosting).filter(
-                    (JobPosting.id == int(raw_id)) if raw_id.isdigit() else (JobPosting.source_job_id == raw_id)
-                ).first()
+                record_action("one_click_apply", raw_id)
+                self.answer_callback_query(query_id, text="⚡ Initiating 15-step auto-apply engine...")
+                res = auto_apply_engine.process_one_click_apply(raw_id, sender_id=sender_id)
 
-                if not job:
-                    self.answer_callback_query(query_id, text="⚠️ Job posting not found or expired.", show_alert=True)
+                if not res.get("success"):
+                    err_msg = res.get("message", "Application could not be completed.")
+                    self.send_message(f"⚠️ <b>Auto-Apply Notice:</b>\n{err_msg}", target_chat_id=chat_id)
                     return
 
-                capability = getattr(job, "application_capability", "USER_REVIEW_REQUIRED")
-
-                # If source is authorized for API submission (e.g. sandbox or authorized direct endpoint)
-                if capability == "API_SUBMISSION_AUTHORIZED":
-                    self.answer_callback_query(query_id, text=f"⚡ Auto-applying to {job.company_name}...")
-                    user = db.query(User).first()
-                    profile = db.query(CandidateProfile).first()
-                    match = db.query(JobMatch).filter(JobMatch.job_id == job.id).first()
-                    match_score = match.overall_score if match else 92.0
-
-                    app_rec = db.query(Application).filter(Application.job_id == job.id).first()
-                    if not app_rec:
-                        app_rec = Application(
-                            job_id=job.id,
-                            user_id=user.id if user else 1,
-                            mode=ApplicationMode.MODE_A_AUTO,
-                            status=ApplicationStatus.SUBMITTING,
-                            idempotency_key=f"tg-{job.id}-{uuid.uuid4().hex[:8]}",
-                            match_score=match_score
-                        )
-                        db.add(app_rec)
-                        db.flush()
-
-                    job_dict = {
-                        "company_name": job.company_name,
-                        "title": job.title,
-                        "description": job.description,
-                        "compensation_text": job.compensation_text,
-                        "application_url": job.application_url
-                    }
-                    cand_dict = {
-                        "full_name": profile.full_name if profile else "Mustkeem Ahmad",
-                        "email": profile.email if profile else "mustkeem324@gmail.com",
-                        "headline": profile.headline if profile else "AI Trainer & Full-Stack Developer",
-                        "summary": profile.summary if profile else "",
-                        "skills": [s.name for s in profile.skills] if (profile and profile.skills) else []
-                    }
-                    summary = document_generator.generate_tailored_summary(cand_dict, job_dict)
-                    cover_letter = document_generator.generate_cover_letter(cand_dict, job_dict)
-                    app_rec.tailored_summary = summary
-                    app_rec.cover_letter = cover_letter
-
-                    conf_id = f"CONF-{uuid.uuid4().hex[:10].upper()}"
-                    now_dt = datetime.datetime.now(datetime.timezone.utc)
-                    now_str = now_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-
-                    app_rec.status = ApplicationStatus.SUBMITTED_CONFIRMED
-                    app_rec.applied_at = now_dt
-
-                    evidence = db.query(SubmissionEvidence).filter(SubmissionEvidence.application_id == app_rec.id).first()
-                    if not evidence:
-                        evidence = SubmissionEvidence(
-                            application_id=app_rec.id,
-                            confirmation_id=conf_id,
-                            confirmation_method="authorized_api_response",
-                            raw_evidence_text=f"Authoritative receipt {conf_id} confirmed for {job.company_name} on {now_str}.",
-                            verified=True
-                        )
-                        db.add(evidence)
-
-                    event = ApplicationEvent(
-                        application_id=app_rec.id,
-                        from_status="SUBMITTING",
-                        to_status="SUBMITTED_CONFIRMED",
-                        trigger_source="telegram_one_click",
-                        message=f"Application authorized and confirmed. ID: {conf_id}",
-                        payload={"confirmation_id": conf_id, "timestamp": now_str}
-                    )
-                    db.add(event)
-                    db.commit()
-
+                if res.get("action") == "SUBMITTED_CONFIRMED":
                     self.notify_application_confirmed(
-                        app_id=app_rec.id,
-                        job=job_dict,
-                        confirmation_id=conf_id,
-                        applied_at=now_str
+                        app_id=res["application_id"],
+                        job=res["job"],
+                        confirmation_id=res["confirmation_id"],
+                        applied_at=res["applied_at"]
+                    )
+                elif res.get("action") == "APPLICATION_PREPARED":
+                    app_id = res["application_id"]
+                    approval_card = approval_service.format_approval_card(app_id)
+                    if approval_card:
+                        self.send_message(
+                            f"📋 <b>APPLICATION PREPARED & STAGED FOR REVIEW</b>\n\n"
+                            f"<b>Company:</b> {res['job']['company_name']}\n"
+                            f"<b>Position:</b> {res['job']['title']}\n"
+                            f"<b>Capability Status:</b> <code>{res.get('capability', 'USER_REVIEW_REQUIRED')}</code>\n\n"
+                            f"<i>{res.get('explanation', '')}</i>",
+                            target_chat_id=chat_id
+                        )
+                        self.send_message(
+                            approval_card["text"],
+                            target_chat_id=chat_id,
+                            reply_markup=approval_card["reply_markup"]
+                        )
+
+            elif data.startswith("appr:"):
+                app_id = int(data.split(":", 1)[1])
+                record_action("approve_application", str(app_id))
+                self.answer_callback_query(query_id, text="Authorizing submission...")
+                res = approval_service.handle_approve(app_id)
+                if res.get("success"):
+                    self.send_message(
+                        f"✅ <b>APPLICATION AUTHORIZED & CONFIRMED</b>\n\n"
+                        f"<b>Company:</b> {res['company_name']}\n"
+                        f"<b>Position:</b> {res['title']}\n"
+                        f"<b>Status:</b> <code>AUTHORIZED_TO_SUBMIT</code>\n"
+                        f"<b>Official Career Portal:</b> <a href='{res['application_url']}'>Open Application</a>\n\n"
+                        f"<i>Application documents approved and archived. Open the official career portal above if manual submission completion is required.</i>",
+                        target_chat_id=chat_id
                     )
                 else:
-                    # For external ATS / web portals where third-party automated submission is prohibited:
-                    # Truthful response: prepare documents & stage in queue
-                    self.answer_callback_query(
-                        query_id, 
-                        text="📋 Tailored documents prepared! Routed to verified review screen.", 
-                        show_alert=True
-                    )
-                    user = db.query(User).first()
-                    match = db.query(JobMatch).filter(JobMatch.job_id == job.id).first()
-                    match_score = match.overall_score if match else 88.0
+                    self.send_message(f"⚠️ {res.get('message')}", target_chat_id=chat_id)
 
-                    app_rec = db.query(Application).filter(Application.job_id == job.id).first()
-                    if not app_rec:
-                        app_rec = Application(
-                            job_id=job.id,
-                            user_id=user.id if user else 1,
-                            mode=ApplicationMode.MODE_B_APPROVAL,
-                            status=ApplicationStatus.AWAITING_APPROVAL,
-                            idempotency_key=f"tg-prep-{job.id}-{uuid.uuid4().hex[:8]}",
-                            match_score=match_score
-                        )
-                        db.add(app_rec)
-                        db.commit()
-
-                    notice = (
-                        f"📋 <b>APPLICATION PREPARED & STAGED FOR REVIEW</b>\n\n"
-                        f"<b>Company:</b> {job.company_name}\n"
-                        f"<b>Position:</b> {job.title}\n"
-                        f"<b>Capability Status:</b> <code>USER_REVIEW_REQUIRED</code>\n\n"
-                        f"<i>Direct programmatic API submission is not authorized for this platform without employer credentials. "
-                        f"Our engine has synthesized your tailored resume summary, cover letter, and factual answers from verified credentials.</i>\n\n"
-                        f"👉 <b>Open Approval Queue:</b> http://localhost:3000/queue\n"
-                        f"👉 <b>Official Portal:</b> <a href='{job.application_url}'>Click Here to Submit</a>"
+            elif data.startswith("rej:"):
+                app_id = int(data.split(":", 1)[1])
+                record_action("reject_application", str(app_id))
+                self.answer_callback_query(query_id, text="Application rejected.")
+                res = approval_service.handle_reject(app_id)
+                if res.get("success"):
+                    self.send_message(
+                        f"❌ <b>APPLICATION CANCELLED</b>\n\n"
+                        f"Application #{app_id} for <b>{res['company_name']}</b> was removed from active queue.",
+                        target_chat_id=chat_id
                     )
-                    self.send_message(notice, target_chat_id=chat_id)
+                else:
+                    self.send_message(f"⚠️ {res.get('message')}", target_chat_id=chat_id)
+
+            elif data.startswith("edit:"):
+                app_id = int(data.split(":", 1)[1])
+                record_action("edit_application", str(app_id))
+                self.answer_callback_query(query_id, text="Opening application editor...")
+                self.send_message(
+                    f"✏️ <b>EDIT APPLICATION #{app_id}</b>\n\n"
+                    f"To customize your tailored summary, cover letter, or answers:\n"
+                    f"1. Open the Web Application Queue: http://localhost:3000/queue\n"
+                    f"2. Edit Application #{app_id} directly in the browser.\n"
+                    f"3. Click <b>Approve & Submit</b> once verified.",
+                    target_chat_id=chat_id
+                )
 
             elif data.startswith("review:"):
                 raw_id = data.split(":", 1)[1]
+                record_action("review_job", raw_id)
                 job = db.query(JobPosting).filter(
                     (JobPosting.id == int(raw_id)) if raw_id.isdigit() else (JobPosting.source_job_id == raw_id)
                 ).first()
@@ -630,12 +634,86 @@ class TelegramNotificationService:
 
             elif data.startswith("skip:"):
                 raw_id = data.split(":", 1)[1]
+                record_action("skip_job", raw_id)
                 self.answer_callback_query(query_id, text="❌ Opportunity skipped from feed.", show_alert=False)
 
             elif data.startswith("save:"):
                 raw_id = data.split(":", 1)[1]
+                record_action("save_job", raw_id)
                 self.saved_jobs.add(raw_id)
                 self.answer_callback_query(query_id, text="⭐ Saved to your bookmarks!", show_alert=False)
+
+            elif data == "nav:queue":
+                record_action("navigate_queue", "queue")
+                self.answer_callback_query(query_id, text="Opening Queue...")
+                pending = db.query(Application).filter(Application.status == "AWAITING_APPROVAL").all()
+                if not pending:
+                    self.send_message("✅ <b>Queue clear!</b> No applications currently awaiting approval.", target_chat_id=chat_id)
+                else:
+                    self.send_message(f"📋 <b>APPLICATIONS AWAITING REVIEW ({len(pending)}):</b>", target_chat_id=chat_id)
+                    for p in pending:
+                        card = approval_service.format_approval_card(p.id)
+                        if card:
+                            self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
+
+            elif data.startswith("cfg:"):
+                cfg_key = data.split(":", 1)[1]
+                record_action("config_toggle", cfg_key)
+                if cfg_key == "toggle_auto":
+                    settings.AUTO_APPLY_ENABLED = not settings.AUTO_APPLY_ENABLED
+                    s_row = db.query(AutomationSetting).filter(AutomationSetting.key == "AUTO_APPLY_ENABLED").first()
+                    if not s_row:
+                        s_row = AutomationSetting(key="AUTO_APPLY_ENABLED", value=str(settings.AUTO_APPLY_ENABLED))
+                        db.add(s_row)
+                    else:
+                        s_row.value = str(settings.AUTO_APPLY_ENABLED)
+                    db.commit()
+                    self.answer_callback_query(query_id, text=f"Auto-Apply is now {'ENABLED' if settings.AUTO_APPLY_ENABLED else 'DISABLED'}")
+
+                elif cfg_key == "toggle_india":
+                    settings.RESTRICT_TO_INDIA_ELIGIBLE = not getattr(settings, "RESTRICT_TO_INDIA_ELIGIBLE", True)
+                    s_row = db.query(AutomationSetting).filter(AutomationSetting.key == "RESTRICT_TO_INDIA_ELIGIBLE").first()
+                    if not s_row:
+                        s_row = AutomationSetting(key="RESTRICT_TO_INDIA_ELIGIBLE", value=str(settings.RESTRICT_TO_INDIA_ELIGIBLE))
+                        db.add(s_row)
+                    else:
+                        s_row.value = str(settings.RESTRICT_TO_INDIA_ELIGIBLE)
+                    db.commit()
+                    self.answer_callback_query(query_id, text=f"India filter is now {'ENABLED' if settings.RESTRICT_TO_INDIA_ELIGIBLE else 'DISABLED'}")
+
+                elif cfg_key == "cycle_score":
+                    next_score = 85 if settings.MIN_MATCH_SCORE == 80 else (90 if settings.MIN_MATCH_SCORE == 85 else 80)
+                    settings.MIN_MATCH_SCORE = next_score
+                    s_row = db.query(AutomationSetting).filter(AutomationSetting.key == "MIN_MATCH_SCORE").first()
+                    if not s_row:
+                        s_row = AutomationSetting(key="MIN_MATCH_SCORE", value=str(next_score))
+                        db.add(s_row)
+                    else:
+                        s_row.value = str(next_score)
+                    db.commit()
+                    self.answer_callback_query(query_id, text=f"Min Match Score set to {next_score}%")
+
+                elif cfg_key.startswith("score_"):
+                    val = int(cfg_key.split("_")[1])
+                    settings.MIN_MATCH_SCORE = val
+                    s_row = db.query(AutomationSetting).filter(AutomationSetting.key == "MIN_MATCH_SCORE").first()
+                    if not s_row:
+                        s_row = AutomationSetting(key="MIN_MATCH_SCORE", value=str(val))
+                        db.add(s_row)
+                    else:
+                        s_row.value = str(val)
+                    db.commit()
+                    self.answer_callback_query(query_id, text=f"Min Match Score set to {val}%")
+
+                # Send updated autoapply dashboard
+                self.send_message(
+                    f"⚙️ <b>AUTOMATION SETTINGS UPDATED</b>\n\n"
+                    f"• <b>Auto-Apply:</b> {'🟢 Enabled' if settings.AUTO_APPLY_ENABLED else '🟡 Disabled (Supervised)'}\n"
+                    f"• <b>India-Only Filter:</b> {'🟢 Strictly ON' if getattr(settings, 'RESTRICT_TO_INDIA_ELIGIBLE', True) else '⚪ OFF (All)'}\n"
+                    f"• <b>Min Match Score:</b> {settings.MIN_MATCH_SCORE}%\n\n"
+                    f"<i>Settings synchronized across Telegram and Web Dashboard.</i>",
+                    target_chat_id=chat_id
+                )
 
         except Exception as e:
             print(f"Error handling callback query: {e}")

@@ -230,6 +230,10 @@ class Application(Base):
     tailored_summary = Column(Text, nullable=True)
     cover_letter = Column(Text, nullable=True)
     answers_payload = Column(JSON, default=dict)
+    application_method = Column(String(100), default="USER_REVIEW_REQUIRED")
+    resume_version = Column(String(255), default="Primary Resume")
+    failure_reason = Column(Text, nullable=True)
+    confirmation_receipt_id = Column(String(255), nullable=True, index=True)
     applied_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -352,3 +356,20 @@ class IntegrationCredential(Base):
     encrypted_credentials = Column(Text, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utcnow)
+
+class TelegramCallbackAction(Base):
+    __tablename__ = "telegram_callback_actions"
+    id = Column(Integer, primary_key=True, index=True)
+    callback_id = Column(String(255), unique=True, nullable=False, index=True)
+    user_id = Column(String(100), nullable=False)
+    action = Column(String(100), nullable=False)
+    target_id = Column(String(100), nullable=False)
+    payload = Column(JSON, default=dict)
+    executed_at = Column(DateTime, default=utcnow)
+
+class AutomationSetting(Base):
+    __tablename__ = "automation_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), unique=True, nullable=False, index=True)
+    value = Column(String(500), nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

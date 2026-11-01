@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # Telegram Notifications
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHAT_ID: str = os.getenv("TELEGRAM_CHAT_ID", "")
+    TELEGRAM_OWNER_ID: str = os.getenv("TELEGRAM_OWNER_ID", "")
     TELEGRAM_ENABLED: bool = os.getenv("TELEGRAM_ENABLED", "true").lower() in ("true", "1")
     
     # AI Engine
@@ -34,6 +35,9 @@ class Settings(BaseSettings):
     
     # Application & Matching Policies
     TIMEZONE: str = os.getenv("TIMEZONE", "Asia/Kolkata")
+    DEFAULT_COUNTRY: str = os.getenv("DEFAULT_COUNTRY", "IN")
+    ALLOW_WORLDWIDE_REMOTE: bool = os.getenv("ALLOW_WORLDWIDE_REMOTE", "true").lower() in ("true", "1")
+    RESTRICT_TO_INDIA_ELIGIBLE: bool = os.getenv("RESTRICT_TO_INDIA_ELIGIBLE", "true").lower() in ("true", "1")
     MIN_MATCH_SCORE: int = int(os.getenv("MIN_MATCH_SCORE", "80"))
     MAX_DAILY_APPLICATIONS: int = int(os.getenv("MAX_DAILY_APPLICATIONS", "10"))
     JOB_SEARCH_INTERVAL_HOURS: int = int(os.getenv("JOB_SEARCH_INTERVAL_HOURS", "6"))
