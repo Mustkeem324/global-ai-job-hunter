@@ -619,6 +619,153 @@ class TelegramNotificationService:
             )
             self.send_message(deploy_msg, target_chat_id=chat_id)
 
+        # =========================================================
+        # PHASE 5: BULK APPLICATION & BATCH ORCHESTRATION COMMANDS
+        # =========================================================
+        elif clean_cmd in ("/bulk", "/bulkapply", "/multiapply"):
+            bulk_menu = (
+                f"⚡ <b>BULK JOB APPLICATION MANAGER (PHASE 5)</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Select and execute verified applications in batches across 12 priority AI & Software domains.\n\n"
+                f"<b>Batch Preflight Pipeline:</b>\n"
+                f"1. Global Discovery & Deduplication\n"
+                f"2. Compatibility & India Eligibility Verification\n"
+                f"3. Company 30-Day Frequency Gate (Max 2)\n"
+                f"4. Tailored Resume & Cover Letter Synthesis\n"
+                f"5. Single-Confirmation Batch Authorization\n\n"
+                f"<i>Choose discovery target size below:</i>"
+            )
+            markup = {
+                "inline_keyboard": [
+                    [
+                        {"text": "🎯 10 Best Jobs", "callback_data": "bulk:find:10"},
+                        {"text": "⚡ 25 Best Jobs", "callback_data": "bulk:find:25"}
+                    ],
+                    [
+                        {"text": "🚀 50 Best Jobs", "callback_data": "bulk:find:50"},
+                        {"text": "🔍 Search All Relevant", "callback_data": "bulk:find:100"}
+                    ],
+                    [
+                        {"text": "📋 View Active Batch", "callback_data": "nav:batch"},
+                        {"text": "📜 Batch History", "callback_data": "nav:batches"}
+                    ]
+                ]
+            }
+            self.send_message(bulk_menu, target_chat_id=chat_id, reply_markup=markup)
+
+        elif clean_cmd in ("/batch", "/activebatch"):
+            db = SessionLocal()
+            try:
+                from app.models.schema import ApplicationBatch
+                active = db.query(ApplicationBatch).order_by(ApplicationBatch.id.desc()).first()
+                if not active:
+                    self.send_message("No batches created yet. Type /bulk to start a new batch discovery.", target_chat_id=chat_id)
+                else:
+                    b_text = (
+                        f"📊 <b>BATCH APPLICATION SESSION: {active.batch_id}</b>\n\n"
+                        f"<b>Name:</b> {active.name}\n"
+                        f"<b>Status:</b> <code>{active.status}</code>\n"
+                        f"<b>Total Jobs Preflighted:</b> {active.total_jobs}\n"
+                        f"<b>Eligible for Batch:</b> {active.eligible_jobs}\n"
+                        f"• ⚡ Authorized Auto-Submit: {active.auto_submittable_jobs}\n"
+                        f"• 📋 Manual Review Required: {active.manual_review_jobs}\n"
+                        f"• ✅ Confirmed Submissions: {active.submitted_count}\n"
+                        f"• ❌ Failed: {active.failed_count}\n\n"
+                        f"<i>Created: {str(active.created_at)[:19]} UTC</i>"
+                    )
+                    markup = {
+                        "inline_keyboard": [
+                            [
+                                {"text": "🚀 Apply to Eligible Jobs", "callback_data": f"batch:apply:{active.batch_id}"},
+                                {"text": "🔄 Refresh", "callback_data": f"batch:refresh:{active.batch_id}"}
+                            ],
+                            [
+                                {"text": "⏸ Pause Batch", "callback_data": f"batch:pause:{active.batch_id}"},
+                                {"text": "▶️ Resume", "callback_data": f"batch:resume:{active.batch_id}"},
+                                {"text": "🛑 Stop", "callback_data": f"batch:stop:{active.batch_id}"}
+                            ]
+                        ]
+                    }
+                    self.send_message(b_text, target_chat_id=chat_id, reply_markup=markup)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/batches", "/batchhistory"):
+            db = SessionLocal()
+            try:
+                from app.models.schema import ApplicationBatch
+                batches = db.query(ApplicationBatch).order_by(ApplicationBatch.id.desc()).limit(5).all()
+                if not batches:
+                    self.send_message("No batch history recorded.", target_chat_id=chat_id)
+                else:
+                    lines = ["📜 <b>PREVIOUS BATCH SESSIONS:</b>\n"]
+                    for b in batches:
+                        lines.append(
+                            f"• <b>{b.batch_id}</b> ({b.status})\n"
+                            f"  Eligible: {b.eligible_jobs} | Submitted: {b.submitted_count} | Manual: {b.manual_review_jobs}\n"
+                            f"  Date: {str(b.created_at)[:16]} UTC\n"
+                        )
+                    self.send_message("\n".join(lines), target_chat_id=chat_id)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/pausebatch",):
+            from app.services.batch_orchestrator import batch_orchestrator
+            db = SessionLocal()
+            try:
+                from app.models.schema import ApplicationBatch
+                active = db.query(ApplicationBatch).filter(ApplicationBatch.status == "RUNNING").order_by(ApplicationBatch.id.desc()).first()
+                if active:
+                    batch_orchestrator.pause_batch(active.batch_id)
+                    self.send_message(f"⏸ Batch {active.batch_id} paused.", target_chat_id=chat_id)
+                else:
+                    self.send_message("No actively running batch to pause.", target_chat_id=chat_id)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/resumebatch",):
+            from app.services.batch_orchestrator import batch_orchestrator
+            db = SessionLocal()
+            try:
+                from app.models.schema import ApplicationBatch
+                active = db.query(ApplicationBatch).filter(ApplicationBatch.status == "PAUSED").order_by(ApplicationBatch.id.desc()).first()
+                if active:
+                    batch_orchestrator.resume_batch(active.batch_id)
+                    self.send_message(f"▶️ Batch {active.batch_id} resumed.", target_chat_id=chat_id)
+                else:
+                    self.send_message("No paused batch found.", target_chat_id=chat_id)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/stopbatch",):
+            from app.services.batch_orchestrator import batch_orchestrator
+            db = SessionLocal()
+            try:
+                from app.models.schema import ApplicationBatch
+                active = db.query(ApplicationBatch).filter(ApplicationBatch.status.in_(["RUNNING", "PAUSED", "AWAITING_AUTHORIZATION"])).order_by(ApplicationBatch.id.desc()).first()
+                if active:
+                    batch_orchestrator.stop_batch(active.batch_id)
+                    self.send_message(f"🛑 Batch {active.batch_id} stopped and cancelled.", target_chat_id=chat_id)
+                else:
+                    self.send_message("No active batch found to stop.", target_chat_id=chat_id)
+            finally:
+                db.close()
+
+        elif clean_cmd in ("/manual", "/manualreview"):
+            db = SessionLocal()
+            try:
+                from app.models.schema import ApplicationBatchItem
+                items = db.query(ApplicationBatchItem).filter(ApplicationBatchItem.status == "MANUAL_REVIEW_REQUIRED").limit(5).all()
+                if not items:
+                    self.send_message("✅ No pending applications currently requiring manual completion.", target_chat_id=chat_id)
+                else:
+                    lines = [f"📋 <b>APPLICATIONS REQUIRING MANUAL COMPLETION ({len(items)}):</b>\n"]
+                    for it in items:
+                        lines.append(f"• <b>{it.job.company_name} — {it.job.title}</b>\n  Portal: <a href='{it.job.application_url}'>Click to Complete</a>\n")
+                    self.send_message("\n".join(lines), target_chat_id=chat_id)
+            finally:
+                db.close()
+
         else:
             # If not a slash command, treat plain text query (e.g. "python", "ai developer") as search
             search_query = text
@@ -845,6 +992,122 @@ class TelegramNotificationService:
                 finally:
                     db.close()
                 self.send_message(f"❌ Follow-up draft #{draft_id} cancelled.", target_chat_id=chat_id)
+
+            # =========================================================
+            # PHASE 5: BATCH CALLBACK ACTIONS
+            # =========================================================
+            elif data.startswith("bulk:find:"):
+                target_sz = int(data.split(":")[2])
+                record_action("bulk_find_jobs", str(target_sz))
+                self.answer_callback_query(query_id, text=f"🔍 Preflighting {target_sz} best jobs...")
+                from app.services.batch_discovery_engine import batch_discovery_engine
+                batch = batch_discovery_engine.create_batch_session(target_size=target_sz)
+
+                preflight_msg = (
+                    f"⚡ <b>BATCH PREFLIGHT COMPLETE: {batch.batch_id}</b>\n\n"
+                    f"<b>Target Opportunities:</b> {batch.total_jobs}\n"
+                    f"<b>Eligible for Batch:</b> <b>{batch.eligible_jobs}</b>\n"
+                    f"• ⚡ Authorized Auto-Submit: {batch.auto_submittable_jobs}\n"
+                    f"• 📋 Manual Review Required: {batch.manual_review_jobs}\n"
+                    f"• ❌ Ineligible / Excluded: {batch.total_jobs - batch.eligible_jobs}\n\n"
+                    f"<i>Single-confirmation batch authorization ready. Review or authorize below:</i>"
+                )
+                markup = {
+                    "inline_keyboard": [
+                        [
+                            {"text": f"🚀 Authorize & Apply ({batch.eligible_jobs} Jobs)", "callback_data": f"batch:apply:{batch.batch_id}"}
+                        ],
+                        [
+                            {"text": "📋 Review Eligible Jobs", "callback_data": f"batch:refresh:{batch.batch_id}"},
+                            {"text": "🛑 Cancel Batch", "callback_data": f"batch:stop:{batch.batch_id}"}
+                        ]
+                    ]
+                }
+                self.send_message(preflight_msg, target_chat_id=chat_id, reply_markup=markup)
+
+            elif data.startswith("batch:apply:"):
+                b_code = data.split(":", 2)[2]
+                record_action("authorize_batch_apply", b_code)
+                self.answer_callback_query(query_id, text="🚀 Authorizing batch application execution...")
+                from app.services.batch_orchestrator import batch_orchestrator
+                res = batch_orchestrator.authorize_and_start_batch(b_code, telegram_user_id=sender_id)
+
+                prog_msg = (
+                    f"📊 <b>BATCH EXECUTION COMPLETED: {b_code}</b>\n\n"
+                    f"<b>Status:</b> <code>{res.get('status')}</code>\n"
+                    f"<b>Confirmed Submitted:</b> <b>{res.get('submitted_count', 0)}</b>\n"
+                    f"<b>Staged for Manual Completion:</b> {res.get('manual_count', 0)}\n\n"
+                    f"<i>{res.get('message', '')}</i>\n"
+                    f"Open Queue: http://localhost:3000/queue"
+                )
+                markup = {
+                    "inline_keyboard": [
+                        [
+                            {"text": "📋 View Queue", "callback_data": "nav:queue"},
+                            {"text": "📜 Batch History", "callback_data": "nav:batches"}
+                        ]
+                    ]
+                }
+                self.send_message(prog_msg, target_chat_id=chat_id, reply_markup=markup)
+
+            elif data.startswith("batch:pause:"):
+                b_code = data.split(":", 2)[2]
+                record_action("pause_batch", b_code)
+                from app.services.batch_orchestrator import batch_orchestrator
+                res = batch_orchestrator.pause_batch(b_code)
+                self.answer_callback_query(query_id, text=res.get("message", "Paused."))
+                self.send_message(f"⏸ Batch {b_code} has been paused.", target_chat_id=chat_id)
+
+            elif data.startswith("batch:resume:"):
+                b_code = data.split(":", 2)[2]
+                record_action("resume_batch", b_code)
+                from app.services.batch_orchestrator import batch_orchestrator
+                res = batch_orchestrator.resume_batch(b_code)
+                self.answer_callback_query(query_id, text=res.get("message", "Resumed."))
+                self.send_message(f"▶️ Batch {b_code} has resumed processing.", target_chat_id=chat_id)
+
+            elif data.startswith("batch:stop:"):
+                b_code = data.split(":", 2)[2]
+                record_action("stop_batch", b_code)
+                from app.services.batch_orchestrator import batch_orchestrator
+                res = batch_orchestrator.stop_batch(b_code)
+                self.answer_callback_query(query_id, text=res.get("message", "Stopped."))
+                self.send_message(f"🛑 Batch {b_code} cancelled and stopped.", target_chat_id=chat_id)
+
+            elif data.startswith("batch:refresh:"):
+                b_code = data.split(":", 2)[2]
+                self.answer_callback_query(query_id, text="Refreshing batch status...")
+                from app.models.schema import ApplicationBatch
+                b_row = db.query(ApplicationBatch).filter(
+                    (ApplicationBatch.batch_id == b_code) | (ApplicationBatch.id == (int(b_code) if b_code.isdigit() else -1))
+                ).first()
+                if b_row:
+                    stat_card = (
+                        f"📊 <b>BATCH PROGRESS SNAPSHOT: {b_row.batch_id}</b>\n\n"
+                        f"<b>Status:</b> <code>{b_row.status}</code>\n"
+                        f"<b>Eligible:</b> {b_row.eligible_jobs}\n"
+                        f"<b>Confirmed Submitted:</b> {b_row.submitted_count}\n"
+                        f"<b>Manual Review:</b> {b_row.manual_review_jobs}\n"
+                        f"<b>Failed:</b> {b_row.failed_count}"
+                    )
+                    self.send_message(stat_card, target_chat_id=chat_id)
+
+            elif data == "nav:batch":
+                self.answer_callback_query(query_id, text="Loading active batch...")
+                from app.models.schema import ApplicationBatch
+                active = db.query(ApplicationBatch).order_by(ApplicationBatch.id.desc()).first()
+                if active:
+                    msg = f"📊 <b>Active Batch:</b> {active.batch_id} (Status: {active.status}) | Eligible: {active.eligible_jobs}"
+                    self.send_message(msg, target_chat_id=chat_id)
+                else:
+                    self.send_message("No active batch found. Use /bulk to create one.", target_chat_id=chat_id)
+
+            elif data == "nav:batches":
+                self.answer_callback_query(query_id, text="Loading history...")
+                from app.models.schema import ApplicationBatch
+                batches = db.query(ApplicationBatch).order_by(ApplicationBatch.id.desc()).limit(5).all()
+                lines = [f"• {b.batch_id} ({b.status}) - Submitted: {b.submitted_count}" for b in batches]
+                self.send_message("📜 <b>Batches:</b>\n" + "\n".join(lines), target_chat_id=chat_id)
 
             elif data.startswith("cfg:"):
                 cfg_key = data.split(":", 1)[1]

@@ -121,7 +121,7 @@ class GlobalDiscoveryService:
                         normalized_role=j.get("normalized_role", j["job_title"]),
                         category="AI & Software Engineering",
                         employment_type=j.get("employment_type", "Full-time"),
-                        workplace_type=j.get("workplace_type", "Remote"),
+                        work_arrangement=j.get("workplace_type", "Remote"),
                         country_eligibility=j.get("location", "Worldwide Remote"),
                         is_india_eligible=j.get("is_india_eligible", True),
                         compensation_text=j.get("compensation_text", "Competitive"),

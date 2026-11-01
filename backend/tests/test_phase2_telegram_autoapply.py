@@ -231,3 +231,4 @@ def test_telegram_callback_and_replay_protection():
     count = db.query(TelegramCallbackAction).filter(TelegramCallbackAction.callback_id == call_id).count()
     assert count == 1  # Handled only once
     db.close()
+    settings.RESTRICT_TO_INDIA_ELIGIBLE = True

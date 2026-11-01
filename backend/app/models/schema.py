@@ -520,3 +520,86 @@ class BackupRun(Base):
     status = Column(String(50), default="SUCCESS")
     verified = Column(Boolean, default=True)
     created_at = Column(DateTime, default=utcnow)
+
+# =========================================================
+# PHASE 5: BULK JOB APPLICATION & BATCH ORCHESTRATION MODELS
+# =========================================================
+
+class ApplicationBatch(Base):
+    __tablename__ = "application_batches"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(String(100), unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    status = Column(String(50), default="CREATED", index=True) 
+    # CREATED, PREFLIGHT_RUNNING, PREFLIGHT_COMPLETE, AWAITING_AUTHORIZATION, AUTHORIZED, RUNNING, PAUSED, COMPLETED, COMPLETED_WITH_EXCEPTIONS, FAILED, CANCELLED
+    target_size = Column(Integer, default=25)
+    total_jobs = Column(Integer, default=0)
+    eligible_jobs = Column(Integer, default=0)
+    auto_submittable_jobs = Column(Integer, default=0)
+    manual_review_jobs = Column(Integer, default=0)
+    submitted_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    items = relationship("ApplicationBatchItem", back_populates="batch", cascade="all, delete-orphan")
+    authorizations = relationship("BatchAuthorization", back_populates="batch", cascade="all, delete-orphan")
+    progress_snapshots = relationship("BatchProgressSnapshot", back_populates="batch", cascade="all, delete-orphan")
+    events = relationship("BatchExecutionEvent", back_populates="batch", cascade="all, delete-orphan")
+
+class ApplicationBatchItem(Base):
+    __tablename__ = "application_batch_items"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, ForeignKey("application_batches.id"), nullable=False)
+    job_id = Column(Integer, ForeignKey("job_postings.id"), nullable=False)
+    status = Column(String(50), default="SELECTED", index=True)
+    # SELECTED, PREFLIGHT_PASSED, EXCLUDED, AUTHORIZED, SUBMITTING, SUBMITTED_CONFIRMED, MANUAL_REVIEW_REQUIRED, FAILED, SKIPPED
+    match_score = Column(Float, default=0.0)
+    capability = Column(String(100), default="MANUAL_REVIEW_REQUIRED")
+    exclusion_reason = Column(String(255), nullable=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=True)
+    confirmation_receipt_id = Column(String(255), nullable=True)
+    processed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    batch = relationship("ApplicationBatch", back_populates="items")
+    job = relationship("JobPosting")
+    application = relationship("Application")
+
+class BatchAuthorization(Base):
+    __tablename__ = "batch_authorizations"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, ForeignKey("application_batches.id"), nullable=False)
+    authorized_by_telegram_id = Column(String(100), nullable=False)
+    authorized_at = Column(DateTime, default=utcnow)
+    policy_snapshot_json = Column(JSON, default=dict)
+    items_count = Column(Integer, default=0)
+
+    batch = relationship("ApplicationBatch", back_populates="authorizations")
+
+class BatchProgressSnapshot(Base):
+    __tablename__ = "batch_progress_snapshots"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, ForeignKey("application_batches.id"), nullable=False)
+    status = Column(String(50), default="RUNNING")
+    confirmed_count = Column(Integer, default=0)
+    processing_count = Column(Integer, default=0)
+    awaiting_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+    manual_count = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow)
+
+    batch = relationship("ApplicationBatch", back_populates="progress_snapshots")
+
+class BatchExecutionEvent(Base):
+    __tablename__ = "batch_execution_events"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, ForeignKey("application_batches.id"), nullable=False)
+    item_id = Column(Integer, nullable=True)
+    event_type = Column(String(100), nullable=False) # STARTED, SUBMITTED, PREPARED, FAILED, PAUSED, RESUMED, COMPLETED
+    message = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=utcnow)
+
+    batch = relationship("ApplicationBatch", back_populates="events")

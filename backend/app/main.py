@@ -12,6 +12,7 @@ from app.api.routes_settings import router as settings_router
 from app.api.routes_telegram import router as telegram_router
 from app.api.routes_analytics import router as analytics_router
 from app.api.routes_audit import router as audit_router
+from app.api.routes_batches import router as batches_router
 from app.services.scheduler_service import scheduler_service
 from app.services.telegram_service import telegram_service
 from app.services.resume_parser import resume_parser_service
@@ -181,6 +182,7 @@ app.include_router(settings_router, prefix=settings.API_V1_STR)
 app.include_router(telegram_router, prefix=settings.API_V1_STR)
 app.include_router(analytics_router, prefix=settings.API_V1_STR)
 app.include_router(audit_router, prefix=settings.API_V1_STR)
+app.include_router(batches_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health_check():
