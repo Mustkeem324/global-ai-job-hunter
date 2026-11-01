@@ -24,6 +24,11 @@ export async function triggerJobDiscovery(q: string = "") {
   return res.json();
 }
 
+export async function fetchVerifiedCompanies() {
+  const res = await fetch(`${API_BASE}/jobs/companies`, { cache: "no-store" });
+  return res.json();
+}
+
 export async function prepareApplication(jobId: number) {
   const res = await fetch(`${API_BASE}/jobs/${jobId}/prepare`, {
     method: "POST",

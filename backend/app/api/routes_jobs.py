@@ -43,6 +43,7 @@ def get_jobs(
         results.append({
             "id": j.id,
             "company_name": j.company_name,
+            "company_website": getattr(j, "company_website", ""),
             "title": j.title,
             "category": j.category,
             "employment_type": j.employment_type,
@@ -53,6 +54,9 @@ def get_jobs(
             "currency": j.currency,
             "required_experience": j.required_experience,
             "application_url": j.application_url,
+            "application_capability": getattr(j, "application_capability", "USER_REVIEW_REQUIRED"),
+            "verification_state": getattr(j, "verification_state", "VERIFIED_OPEN"),
+            "location_evidence": getattr(j, "location_evidence", ""),
             "description": j.description,
             "status": j.status,
             "match_score": score,
@@ -63,6 +67,24 @@ def get_jobs(
         "total": len(results),
         "jobs": results[offset:offset + limit]
     }
+
+@router.get("/companies")
+def get_verified_companies(db: Session = Depends(get_db)):
+    """Return list of verified employer career boards from the registry."""
+    from app.models.schema import CompanyRegistry
+    records = db.query(CompanyRegistry).all()
+    return [
+        {
+            "id": r.id,
+            "company_name": r.company_name,
+            "official_website": r.official_website,
+            "career_page": r.career_page,
+            "ats_provider": r.ats_provider,
+            "ats_board_identifier": r.ats_board_identifier,
+            "supported_locations": r.supported_locations,
+            "source_status": r.source_status
+        } for r in records
+    ]
 
 @router.get("/{job_id}")
 def get_job_detail(job_id: int, db: Session = Depends(get_db)):

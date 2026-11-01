@@ -180,8 +180,14 @@ class TelegramNotificationService:
         chat_id = str(message.get("chat", {}).get("id"))
         text = (message.get("text") or "").strip()
         parts = text.split(maxsplit=1)
-        command = parts[0].lower() if parts else ""
-        query_param = parts[1] if len(parts) > 1 else ""
+        raw_cmd = parts[0].strip().lower() if parts else ""
+        query_param = parts[1].strip() if len(parts) > 1 else ""
+
+        # Normalize command by stripping bot username (e.g. /job@NXmod_bot -> /job)
+        clean_cmd = raw_cmd.split("@")[0].strip().lower()
+        has_slash = clean_cmd.startswith("/")
+        if not has_slash:
+            clean_cmd = "/" + clean_cmd
 
         if not self.chat_id:
             self.chat_id = chat_id
@@ -189,12 +195,13 @@ class TelegramNotificationService:
         from app.core.database import SessionLocal
         from app.models.schema import JobPosting, Application, JobMatch, CandidateProfile
 
-        if command == "/start":
+        if clean_cmd in ("/start", "/menu", "/intro"):
             self.send_message(self.build_start_message(), target_chat_id=chat_id)
 
-        elif command == "/help":
+        elif clean_cmd in ("/help", "/instructions", "/info"):
             help_msg = (
                 f"📖 <b>GLOBAL JOB HUNTER AI — COMMAND DIRECTORY</b>\n\n"
+                f"• <b>/job</b> or <b>/jobs</b> — View top high-match opportunities (≥85%)\n"
                 f"• <b>/start</b> — Main menu & system overview\n"
                 f"• <b>/profile</b> — My resume and extracted skills\n"
                 f"• <b>/search &lt;query&gt;</b> — Search real global vacancies\n"
@@ -215,7 +222,7 @@ class TelegramNotificationService:
             )
             self.send_message(help_msg, target_chat_id=chat_id)
 
-        elif command == "/profile":
+        elif clean_cmd in ("/profile", "/cv", "/resume", "/candidate"):
             db = SessionLocal()
             try:
                 prof = db.query(CandidateProfile).first()
@@ -244,20 +251,7 @@ class TelegramNotificationService:
             finally:
                 db.close()
 
-        elif command == "/search":
-            q = query_param or "AI"
-            self.send_message(f"🔍 <i>Searching live global sources for '<b>{q}</b>'...</i>", target_chat_id=chat_id)
-            from app.services.discovery_service import discovery_service
-            jobs = discovery_service.run_discovery(query=q, persist=True)
-            if not jobs:
-                self.send_message(f"No vacancies found matching '{q}'.", target_chat_id=chat_id)
-            else:
-                self.send_message(f"🎯 <b>Found {len(jobs)} vacancies for '{q}'. Showing top matches:</b>", target_chat_id=chat_id)
-                for j in jobs[:3]:
-                    card = self.format_job_card(j, 88.0)
-                    self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
-
-        elif command == "/topjobs":
+        elif clean_cmd in ("/job", "/jobs", "/topjob", "/topjobs"):
             db = SessionLocal()
             try:
                 top_matches = db.query(JobMatch).filter(JobMatch.overall_score >= 85).order_by(JobMatch.overall_score.desc()).limit(3).all()
@@ -276,7 +270,7 @@ class TelegramNotificationService:
                             "employment_type": job.employment_type,
                             "compensation_text": job.compensation_text,
                             "application_url": job.application_url,
-                            "source_id": "ATS Verified",
+                            "source_id": getattr(job, "source_id", "ATS Verified"),
                             "posted_at": str(job.posted_date or "")[:10]
                         }
                         card = self.format_job_card(job_dict, m.overall_score)
@@ -284,21 +278,34 @@ class TelegramNotificationService:
             finally:
                 db.close()
 
-        elif command in ("/remote", "/aitraining", "/fullstack", "/freelance"):
+        elif clean_cmd in ("/search", "/find", "/query"):
+            q = query_param or "AI"
+            self.send_message(f"🔍 <i>Searching live global sources for '<b>{q}</b>'...</i>", target_chat_id=chat_id)
+            from app.services.discovery_service import discovery_service
+            jobs = discovery_service.run_discovery(query=q, persist=True)
+            if not jobs:
+                self.send_message(f"No vacancies found matching '{q}'.", target_chat_id=chat_id)
+            else:
+                self.send_message(f"🎯 <b>Found {len(jobs)} vacancies for '{q}'. Showing top matches:</b>", target_chat_id=chat_id)
+                for j in jobs[:3]:
+                    card = self.format_job_card(j, 88.0)
+                    self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
+
+        elif clean_cmd in ("/remote", "/aitraining", "/fullstack", "/freelance"):
             db = SessionLocal()
             try:
                 query_filter = db.query(JobPosting)
-                if command == "/remote":
+                if clean_cmd == "/remote":
                     query_filter = query_filter.filter(JobPosting.workplace_type == "Remote")
-                elif command == "/aitraining":
+                elif clean_cmd == "/aitraining":
                     query_filter = query_filter.filter(JobPosting.title.ilike("%AI%") | JobPosting.title.ilike("%LLM%") | JobPosting.title.ilike("%Trainer%"))
-                elif command == "/fullstack":
+                elif clean_cmd == "/fullstack":
                     query_filter = query_filter.filter(JobPosting.title.ilike("%Full%") | JobPosting.title.ilike("%Python%") | JobPosting.title.ilike("%Engineer%"))
-                elif command == "/freelance":
+                elif clean_cmd == "/freelance":
                     query_filter = query_filter.filter(JobPosting.employment_type.ilike("%Contract%") | JobPosting.employment_type.ilike("%Freelance%"))
 
                 results = query_filter.limit(3).all()
-                tag_label = command.replace("/", "").upper()
+                tag_label = clean_cmd.replace("/", "").upper()
                 if not results:
                     self.send_message(f"No specific vacancies in {tag_label} found currently. Use /search to crawl.", target_chat_id=chat_id)
                 else:
@@ -321,7 +328,7 @@ class TelegramNotificationService:
             finally:
                 db.close()
 
-        elif command == "/filters":
+        elif clean_cmd in ("/filters", "/filter", "/preferences"):
             filt_msg = (
                 f"⚙️ <b>CURRENT SEARCH PREFERENCES & FILTERS</b>\n\n"
                 f"• <b>Default Applicant Location:</b> India (Asia/Kolkata)\n"
@@ -333,7 +340,7 @@ class TelegramNotificationService:
             )
             self.send_message(filt_msg, target_chat_id=chat_id)
 
-        elif command == "/autoapply":
+        elif clean_cmd in ("/autoapply", "/apply"):
             status_text = "🟢 Enabled (Authorized Allowlist Only)" if settings.AUTO_APPLY_ENABLED else "🟡 Supervised (Review Required)"
             aa_msg = (
                 f"⚡ <b>APPLICATION AUTOMATION SETTINGS</b>\n\n"
@@ -345,7 +352,7 @@ class TelegramNotificationService:
             )
             self.send_message(aa_msg, target_chat_id=chat_id)
 
-        elif command == "/applications":
+        elif clean_cmd in ("/applications", "/application", "/apps", "/app", "/history"):
             db = SessionLocal()
             try:
                 apps = db.query(Application).filter(Application.status == "SUBMITTED_CONFIRMED").limit(5).all()
@@ -364,7 +371,7 @@ class TelegramNotificationService:
             finally:
                 db.close()
 
-        elif command == "/pending":
+        elif clean_cmd in ("/pending", "/queue", "/review"):
             db = SessionLocal()
             try:
                 pending = db.query(Application).filter(Application.status == "AWAITING_APPROVAL").all()
@@ -387,7 +394,7 @@ class TelegramNotificationService:
             finally:
                 db.close()
 
-        elif command == "/stats":
+        elif clean_cmd in ("/stats", "/stat", "/status", "/metrics"):
             db = SessionLocal()
             try:
                 total_jobs = db.query(JobPosting).count()
@@ -409,7 +416,7 @@ class TelegramNotificationService:
             finally:
                 db.close()
 
-        elif command == "/sources":
+        elif clean_cmd in ("/sources", "/source", "/connectors", "/apis"):
             src_msg = (
                 f"🔌 <b>API CONNECTOR REGISTRY & STATUS</b>\n\n"
                 f"1. <b>Greenhouse ATS:</b> 🟢 Active (Canonical, Automattic, GitLab, Scale AI, Figma)\n"
@@ -424,13 +431,27 @@ class TelegramNotificationService:
             )
             self.send_message(src_msg, target_chat_id=chat_id)
 
-        elif command == "/pause":
+        elif clean_cmd in ("/pause", "/stop"):
             self.is_paused = True
             self.send_message("⏸ <b>Scheduled background operations paused.</b> Manual searches via /search remain active.", target_chat_id=chat_id)
 
-        elif command == "/resume":
+        elif clean_cmd in ("/resume", "/continue", "/run"):
             self.is_paused = False
             self.send_message("▶️ <b>Scheduled operations resumed.</b> 6-hour discovery cycle active.", target_chat_id=chat_id)
+
+        else:
+            # If not a slash command, treat plain text query (e.g. "python", "ai developer") as search
+            search_query = text
+            self.send_message(f"🔍 <i>Searching live global sources for '<b>{search_query}</b>'...</i>", target_chat_id=chat_id)
+            from app.services.discovery_service import discovery_service
+            jobs = discovery_service.run_discovery(query=search_query, persist=True)
+            if not jobs:
+                self.send_message(f"No vacancies found matching '{search_query}'. Try another search query or check /topjobs.", target_chat_id=chat_id)
+            else:
+                self.send_message(f"🎯 <b>Found {len(jobs)} vacancies for '{search_query}'. Showing top matches:</b>", target_chat_id=chat_id)
+                for j in jobs[:3]:
+                    card = self.format_job_card(j, 88.0)
+                    self.send_message(card["text"], target_chat_id=chat_id, reply_markup=card["reply_markup"])
 
     # =========================================================
     # CALLBACK QUERY HANDLER (5 FUNCTIONAL BUTTONS)
