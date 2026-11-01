@@ -134,3 +134,57 @@ export async function fetchAuditLogs() {
   const res = await fetch(`${API_BASE}/audit/logs`, { cache: "no-store" });
   return res.json();
 }
+
+export async function fetchBatches(limit: number = 20) {
+  const res = await fetch(`${API_BASE}/batches/?limit=${limit}`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function createBatch(targetSize: number = 25, category?: string) {
+  const query = new URLSearchParams();
+  query.append("target_size", targetSize.toString());
+  if (category) query.append("category", category);
+  const res = await fetch(`${API_BASE}/batches/create?${query.toString()}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function fetchBatchDetail(batchId: string) {
+  const res = await fetch(`${API_BASE}/batches/${batchId}`, { cache: "no-store" });
+  return res.json();
+}
+
+export async function applyBatch(batchId: string, authorizedBy: string = "web_ui") {
+  const res = await fetch(`${API_BASE}/batches/${batchId}/apply?authorized_by=${authorizedBy}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function pauseBatch(batchId: string) {
+  const res = await fetch(`${API_BASE}/batches/${batchId}/pause`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function resumeBatch(batchId: string) {
+  const res = await fetch(`${API_BASE}/batches/${batchId}/resume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+
+export async function stopBatch(batchId: string) {
+  const res = await fetch(`${API_BASE}/batches/${batchId}/stop`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+  return res.json();
+}
+

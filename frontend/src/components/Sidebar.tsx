@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, 
   Search, 
+  Layers,
   Clock, 
   CheckCircle2, 
   FileText, 
@@ -17,6 +18,7 @@ import {
 const NAV_ITEMS = [
   { name: "Overview", href: "/", icon: LayoutDashboard },
   { name: "Job Explorer", href: "/jobs", icon: Search },
+  { name: "Bulk Applications", href: "/batches", icon: Layers },
   { name: "Application Queue", href: "/queue", icon: Clock },
   { name: "Application History", href: "/history", icon: CheckCircle2 },
   { name: "Resume Intelligence", href: "/resumes", icon: FileText },
