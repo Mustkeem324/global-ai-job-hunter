@@ -1,32 +1,93 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jobhunter_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jobhunter_db}
+      POSTGRES_USER: ${POSTGRES_USER:-jobhunter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepassword}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jobhunter} -d ${POSTGRES_DB:-jobhunter_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: jobhunter_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    container_name: global_job_hunter_backend
+    container_name: jobhunter_backend
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=sqlite:////app/data/job_hunter.db
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-jobhunter}:${POSTGRES_PASSWORD:-securepassword}@postgres:5432/${POSTGRES_DB:-jobhunter_db}
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_DIR=/app/storage
       - RESUME_FOLDER=/app/resumes
       - TIMEZONE=Asia/Kolkata
       - AUTO_APPLY_ENABLED=false
       - APPLICATION_APPROVAL_REQUIRED=true
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - TELEGRAM_OWNER_ID=${TELEGRAM_OWNER_ID:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
-      - job_data:/app/data
-      - ./resumes:/app/resumes:ro
+      - job_storage:/app/storage
+      - job_resumes:/app/resumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: jobhunter_worker
+    restart: unless-stopped
+    command: python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-jobhunter}:${POSTGRES_PASSWORD:-securepassword}@postgres:5432/${POSTGRES_DB:-jobhunter_db}
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_DIR=/app/storage
+      - RESUME_FOLDER=/app/resumes
+    volumes:
+      - job_storage:/app/storage
+      - job_resumes:/app/resumes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   frontend:
     build:
       context: ./frontend
       dockerfile: ../Dockerfile.frontend
-    container_name: global_job_hunter_frontend
+    container_name: jobhunter_frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -36,4 +97,7 @@ services:
       - backend
 
 volumes:
-  job_data:
+  pgdata:
+  redisdata:
+  job_storage:
+  job_resumes:

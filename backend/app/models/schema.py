@@ -373,3 +373,150 @@ class AutomationSetting(Base):
     key = Column(String(100), unique=True, nullable=False, index=True)
     value = Column(String(500), nullable=False)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+# =========================================================
+# PHASE 3 & 4 DATABASE MODELS
+# =========================================================
+
+class CandidateFact(Base):
+    __tablename__ = "candidate_facts"
+    id = Column(Integer, primary_key=True, index=True)
+    profile_id = Column(Integer, ForeignKey("candidate_profiles.id"), nullable=False)
+    category = Column(String(100), nullable=False) # education, experience, skill, project, claim
+    fact_key = Column(String(255), nullable=False)
+    fact_value = Column(Text, nullable=False)
+    source_document = Column(String(255), default="resume.pdf")
+    source_location = Column(String(255), default="Page 1")
+    confidence = Column(Float, default=1.0)
+    user_verified = Column(Boolean, default=True)
+    last_confirmed_at = Column(DateTime, default=utcnow)
+
+class TailoredResumeVariant(Base):
+    __tablename__ = "tailored_resume_variants"
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("job_postings.id"), nullable=False)
+    variant_type = Column(String(100), nullable=False) # AI_TRAINING, LLM_EVALUATION, AI_CODING, FULLSTACK, GENERATIVE_AI, GENERAL_SWE
+    title = Column(String(255), nullable=False)
+    content_text = Column(Text, nullable=False)
+    pdf_path = Column(String(500), nullable=True)
+    docx_path = Column(String(500), nullable=True)
+    validation_status = Column(String(50), default="VALIDATED") # VALIDATED, REJECTED_UNSUPPORTED_CLAIMS
+    source_claims = Column(JSON, default=list)
+    unsupported_claims = Column(JSON, default=list)
+    created_at = Column(DateTime, default=utcnow)
+
+class FormSchema(Base):
+    __tablename__ = "form_schemas"
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("job_postings.id"), nullable=False)
+    form_url = Column(String(500), nullable=False)
+    fields_json = Column(JSON, default=list)
+    discovered_at = Column(DateTime, default=utcnow)
+
+class JobPriority(Base):
+    __tablename__ = "job_priorities"
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("job_postings.id"), unique=True, nullable=False)
+    priority_tier = Column(String(50), nullable=False) # PRIORITY_A, PRIORITY_B, PRIORITY_C, PRIORITY_D
+    priority_score = Column(Float, nullable=False) # 0 to 100
+    compatibility_score = Column(Float, default=0.0)
+    eligibility_score = Column(Float, default=0.0)
+    preference_score = Column(Float, default=0.0)
+    freshness_score = Column(Float, default=0.0)
+    effort_score = Column(Float, default=0.0)
+    feedback_adjustment = Column(Float, default=0.0)
+    explanation_json = Column(JSON, default=dict)
+    calculated_at = Column(DateTime, default=utcnow)
+
+class UserFeedback(Base):
+    __tablename__ = "user_feedbacks"
+    id = Column(Integer, primary_key=True, index=True)
+    job_id = Column(Integer, ForeignKey("job_postings.id"), nullable=False)
+    action = Column(String(50), nullable=False) # SAVED, SKIPPED, APPROVED, REJECTED, APPLIED
+    role_category = Column(String(100), nullable=True)
+    affinity_delta = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=utcnow)
+
+class RecruiterMessage(Base):
+    __tablename__ = "recruiter_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=True)
+    message_id = Column(String(255), unique=True, nullable=False)
+    thread_id = Column(String(255), nullable=True)
+    sender_email = Column(String(255), nullable=False)
+    sender_domain = Column(String(255), nullable=False)
+    subject = Column(String(500), nullable=False)
+    body_text = Column(Text, nullable=False)
+    received_at = Column(DateTime, default=utcnow)
+    classification = Column(String(100), default="UNCERTAIN")
+    confidence = Column(Float, default=0.0)
+    matched_criteria = Column(JSON, default=dict)
+    requires_action = Column(Boolean, default=False)
+    is_resolved = Column(Boolean, default=False)
+
+class RecruiterEvent(Base):
+    __tablename__ = "recruiter_events"
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("recruiter_messages.id"), nullable=False)
+    event_type = Column(String(100), nullable=False) # INTERVIEW_INVITE, ASSESSMENT_DEADLINE, OFFER, REJECTION
+    event_date = Column(DateTime, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+class FollowupDraft(Base):
+    __tablename__ = "followup_drafts"
+    id = Column(Integer, primary_key=True, index=True)
+    application_id = Column(Integer, ForeignKey("applications.id"), nullable=False)
+    reason = Column(String(255), nullable=False)
+    suggested_send_date = Column(DateTime, default=utcnow)
+    subject = Column(String(500), nullable=False)
+    body_text = Column(Text, nullable=False)
+    status = Column(String(50), default="DRAFTED") # DRAFTED, APPROVED, SENT, CANCELLED
+    approved_at = Column(DateTime, nullable=True)
+    sent_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
+class SourceHealth(Base):
+    __tablename__ = "source_health"
+    id = Column(Integer, primary_key=True, index=True)
+    source_name = Column(String(100), unique=True, nullable=False)
+    status = Column(String(50), default="HEALTHY") # HEALTHY, DEGRADED, RATE_LIMITED, DOWN
+    last_sync_at = Column(DateTime, default=utcnow)
+    error_count = Column(Integer, default=0)
+    circuit_breaker_open = Column(Boolean, default=False)
+    avg_latency_ms = Column(Float, default=0.0)
+
+class SourceSyncCursor(Base):
+    __tablename__ = "source_sync_cursors"
+    id = Column(Integer, primary_key=True, index=True)
+    source_name = Column(String(100), unique=True, nullable=False)
+    cursor_value = Column(String(500), nullable=False)
+    last_updated_at = Column(DateTime, default=utcnow)
+
+class CostUsage(Base):
+    __tablename__ = "cost_usage"
+    id = Column(Integer, primary_key=True, index=True)
+    service_name = Column(String(100), nullable=False) # gemini, playwright, search_api
+    tokens_in = Column(Integer, default=0)
+    tokens_out = Column(Integer, default=0)
+    estimated_cost_usd = Column(Float, default=0.0)
+    date_str = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=utcnow)
+
+class CloudHealthCheck(Base):
+    __tablename__ = "cloud_health_checks"
+    id = Column(Integer, primary_key=True, index=True)
+    component = Column(String(100), nullable=False) # database, redis, worker, telegram, scheduler
+    status = Column(String(50), default="HEALTHY")
+    details_json = Column(JSON, default=dict)
+    checked_at = Column(DateTime, default=utcnow)
+
+class BackupRun(Base):
+    __tablename__ = "backup_runs"
+    id = Column(Integer, primary_key=True, index=True)
+    backup_type = Column(String(50), default="FULL_DB")
+    file_path = Column(String(500), nullable=False)
+    file_size_bytes = Column(Integer, default=0)
+    status = Column(String(50), default="SUCCESS")
+    verified = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utcnow)
